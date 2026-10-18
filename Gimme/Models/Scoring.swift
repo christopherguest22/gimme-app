@@ -51,4 +51,62 @@ enum Scoring {
         let index = best.reduce(0, +) / Double(best.count)
         return (index * 10).rounded() / 10
     }
+
+    // MARK: Side games (gross, no handicap strokes yet)
+
+    struct SkinsResult: Equatable {
+        /// Player id that won each decided hole.
+        var winners: [Int: String] = [:]
+        var skins: [String: Int] = [:]
+        /// Skins riding on the next hole after ties.
+        var carryover = 0
+    }
+
+    /// Skins: lowest score alone on a hole wins it; ties carry the skin to the next hole.
+    static func skins(_ round: Round) -> SkinsResult {
+        var result = SkinsResult()
+        var pot = 1
+        for hole in 1...round.pars.count {
+            let scores = round.players.compactMap { p in round.strokes(p.id, hole: hole).map { (p.id, $0) } }
+            guard scores.count == round.players.count, let best = scores.map(\.1).min() else { break }
+            let leaders = scores.filter { $0.1 == best }
+            if leaders.count == 1 {
+                result.winners[hole] = leaders[0].0
+                result.skins[leaders[0].0, default: 0] += pot
+                pot = 1
+            } else {
+                pot += 1
+            }
+        }
+        result.carryover = pot - 1
+        return result
+    }
+
+    struct NassauLeg: Identifiable, Equatable {
+        var name: String
+        /// Leader's player id, nil when tied or not started.
+        var leader: String?
+        var margin: Int
+        var holesCounted: Int
+        var id: String { name }
+    }
+
+    /// Nassau as stroke play: lowest total on the front nine, back nine and full 18,
+    /// counting only holes everyone has finished.
+    static func nassau(_ round: Round) -> [NassauLeg] {
+        let count = round.pars.count
+        let legs: [(String, ClosedRange<Int>)] = count >= 18
+            ? [("Front 9", 1...9), ("Back 9", 10...18), ("Overall", 1...18)]
+            : [("Overall", 1...count)]
+        return legs.map { (name, holes) -> NassauLeg in
+            let done = holes.filter { h in round.players.allSatisfy { round.strokes($0.id, hole: h) != nil } }
+            let totals = round.players.map { p in (p.id, done.reduce(0) { $0 + (round.strokes(p.id, hole: $1) ?? 0) }) }
+                .sorted { $0.1 < $1.1 }
+            guard !done.isEmpty, totals.count > 1 else {
+                return NassauLeg(name: name, leader: nil, margin: 0, holesCounted: done.count)
+            }
+            let margin = totals[1].1 - totals[0].1
+            return NassauLeg(name: name, leader: margin > 0 ? totals[0].0 : nil, margin: margin, holesCounted: done.count)
+        }
+    }
 }

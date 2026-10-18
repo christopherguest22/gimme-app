@@ -8,24 +8,38 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: ""
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: "2.20.0"
 targets:
   Gimme:
     type: application
     platform: iOS
     sources: [Gimme]
+    dependencies:
+      - package: Supabase
     info:
       path: Gimme/Info.plist
       properties:
         CFBundleDisplayName: Gimme
-        CFBundleShortVersionString: "0.1.0"
-        UILaunchScreen: {}
+        CFBundleShortVersionString: "0.2.0"
+        UILaunchScreen:
+          UIColorName: AccentColor
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [location]
         NSLocationWhenInUseUsageDescription: "Gimme uses your location for distances to the green and to unlock prize drops on the hole you're playing."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Gimme keeps GPS on during your round, even with your phone in your pocket, so you don't miss prize drops."
+        # Leave blank to run on demo data. Fill in from Supabase › Project Settings › API.
+        SupabaseURL: ""
+        SupabaseAnonKey: ""
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gimmegolf.app
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
   GimmeTests:
     type: bundle.unit-test
     platform: iOS

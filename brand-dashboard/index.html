@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gimme for Brands</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --green: #1c8c4a; --deep: #0a4a29; --gold: #f2b821; --bg: #f4f6f3; --card: #fff;
+    --text: #13241a; --muted: #5b6b61; --line: #dfe5df; --danger: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1611; --card: #16231b; --text: #e8f0ea; --muted: #9db0a3; --line: #26362c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 ui-rounded, -apple-system, "SF Pro Rounded", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: linear-gradient(135deg, var(--deep), var(--green)); color: #fff; padding: 18px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; }
+  header .tag { background: var(--gold); color: #000; font-weight: 700; border-radius: 99px; padding: 2px 10px; font-size: 12px; }
+  header .spacer { flex: 1; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+  .card h2 { margin: 0 0 12px; font-size: 18px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .kpi b { display: block; font-size: 28px; }
+  .kpi span { color: var(--muted); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button { font: inherit; font-weight: 700; border: 0; border-radius: 99px; padding: 11px 18px; cursor: pointer; background: var(--green); color: #fff; }
+  button.gold { background: var(--gold); color: #000; }
+  button.ghost { background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.5); }
+  #map { height: 340px; border-radius: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  .scroll { overflow-x: auto; }
+  .pill { border-radius: 99px; padding: 2px 9px; font-size: 12px; font-weight: 700; background: rgba(242,184,33,.25); }
+  .msg { margin-top: 10px; font-weight: 600; }
+  .msg.err { color: var(--danger); }
+  .hidden { display: none !important; }
+  .signin { max-width: 420px; margin: 60px auto; }
+  .note { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Gimme for Brands</h1>
+  <span class="tag" id="modeTag">Demo data</span>
+  <span class="spacer"></span>
+  <select id="brandSelect" style="max-width:220px" class="hidden"></select>
+  <button class="ghost hidden" id="signOut">Sign out</button>
+</header>
+
+<section class="card signin hidden" id="signin">
+  <h2>Sign in</h2>
+  <p class="note">Use the email your Gimme brand account is set up with. We'll send a 6-digit code.</p>
+  <label for="email">Email</label>
+  <input id="email" type="email" placeholder="you@brand.com">
+  <button style="margin-top:12px" id="sendCode">Email me a code</button>
+  <div id="codeBox" class="hidden">
+    <label for="code">Code</label>
+    <input id="code" inputmode="numeric" placeholder="123456">
+    <button style="margin-top:12px" id="verify">Sign in</button>
+  </div>
+  <div class="msg" id="signinMsg"></div>
+</section>
+
+<main id="app" class="hidden">
+  <div class="kpis">
+    <div class="kpi"><b id="kDrops">0</b><span>Live drops</span></div>
+    <div class="kpi"><b id="kReached">0</b><span>Golfers reached</span></div>
+    <div class="kpi"><b id="kClaimed">0</b><span>Prizes claimed</span></div>
+    <div class="kpi"><b id="kRedeemed">0</b><span>Codes redeemed</span></div>
+  </div>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Place a prize drop</h2>
+      <label for="course">Course</label>
+      <select id="course"></select>
+      <div class="row">
+        <div><label for="hole">Hole</label><select id="hole"></select></div>
+        <div><label for="challenge">To win</label>
+          <select id="challenge">
+            <option value="none">Reach the green</option>
+            <option value="parOrBetter">Make par or better</option>
+            <option value="birdieOrBetter">Make birdie or better</option>
+          </select></div>
+      </div>
+      <label for="prize">Prize</label>
+      <input id="prize" placeholder="Free sleeve of balls">
+      <label for="detail">How to redeem</label>
+      <input id="detail" placeholder="Show the code at the pro shop">
+      <div class="row">
+        <div><label for="qty">How many</label><input id="qty" type="number" min="1" value="25"></div>
+        <div><label for="radius">Unlock zone (yards around the green)</label><input id="radius" type="number" min="15" value="50"></div>
+      </div>
+      <div class="row">
+        <div><label for="starts">Starts</label><input id="starts" type="date"></div>
+        <div><label for="ends">Ends</label><input id="ends" type="date"></div>
+      </div>
+      <button class="gold" style="margin-top:14px" id="create">Publish drop</button>
+      <div class="msg" id="createMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Unlock zone</h2>
+      <div id="map"></div>
+      <p class="note">The gold circle is where golfers unlock the drop during a round. Imagery © Esri. Course maps © OpenStreetMap contributors.</p>
+      <h2 style="margin-top:16px">Redeem a code</h2>
+      <div class="row">
+        <input id="redeemCode" placeholder="GIMME-1A2B3C">
+        <button id="redeem">Mark as used</button>
+      </div>
+      <div class="msg" id="redeemMsg"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Campaign results</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Prize</th><th>Course</th><th>Hole</th><th>To win</th><th>Left</th><th>Reached</th><th>Claimed</th><th>Redeemed</th><th>Ends</th></tr></thead>
+        <tbody id="stats"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+// Fill these in from Supabase › Project Settings › API to use real data. Left blank, the page runs on demo data.
+const SUPABASE_URL = "";
+const SUPABASE_ANON_KEY = "";
+
+const live = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+const db = live ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const $ = (id) => document.getElementById(id);
+const challengeLabel = { none: "Reach the green", parOrBetter: "Par or better", birdieOrBetter: "Birdie or better" };
+let courses = [], brands = [], stats = [], brandId = null;
+
+// ---------- Demo data (mirrors the iPhone app's demo course) ----------
+function offset(p, meters, bearing) {
+  const R = 6371000, d = meters / R, b = bearing * Math.PI / 180;
+  const lat1 = p.latitude * Math.PI / 180, lon1 = p.longitude * Math.PI / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return { latitude: lat2 * 180 / Math.PI, longitude: lon2 * 180 / Math.PI };
+}
+function demoCourse() {
+  const pars = [4,4,3,5,4,4,3,4,5,4,3,4,5,4,4,3,4,5], len = { 3: 150, 4: 355, 5: 470 };
+  let tee = { latitude: 33.0, longitude: -117.2 }; const holes = [];
+  pars.forEach((par, i) => {
+    const bearing = i % 2 === 0 ? 2 : 182, greenCenter = offset(tee, len[par], bearing);
+    holes.push({ number: i + 1, par, tee, greenCenter });
+    tee = offset(greenCenter, 60, 92);
+  });
+  return { id: "demo-links", name: "Gimme Demo Links", data: { holes } };
+}
+const demo = {
+  brands: [{ id: "b1", name: "Fairway Co." }],
+  stats: [
+    { id: "d1", brand_id: "b1", prize: "Free sleeve of balls", course_name: "Gimme Demo Links", course_id: "demo-links", hole: 7, challenge: "parOrBetter", remaining: 9, golfers_reached: 64, prizes_claimed: 3, codes_redeemed: 2, expires_at: new Date(Date.now() + 6 * 864e5).toISOString() },
+    { id: "d2", brand_id: "b1", prize: "20% off a driver", course_name: "Gimme Demo Links", course_id: "demo-links", hole: 16, challenge: "none", remaining: 12, golfers_reached: 88, prizes_claimed: 28, codes_redeemed: 11, expires_at: new Date(Date.now() + 13 * 864e5).toISOString() },
+  ],
+};
+
+// ---------- Data access ----------
+async function loadAll() {
+  if (!live) {
+    brands = demo.brands; courses = [demoCourse()]; stats = demo.stats;
+  } else {
+    const [b, c] = await Promise.all([db.from("brands").select("id, name"), db.from("courses").select("id, name, data").order("name")]);
+    if (b.error || c.error) throw (b.error || c.error);
+    brands = b.data; courses = c.data;
+    if (!brands.length) { show("signinMsg", "This account isn't linked to a brand yet. Ask Gimme to add you.", true); return; }
+    brandId = brandId || brands[0].id;
+    const s = await db.from("brand_drop_stats").select("*").eq("brand_id", brandId).order("starts_at", { ascending: false });
+    if (s.error) throw s.error;
+    stats = s.data;
+  }
+  brandId = brandId || brands[0]?.id;
+  render();
+}
+
+async function createDrop() {
+  const course = courses.find(c => c.id === $("course").value);
+  const hole = course?.data.holes.find(h => h.number === Number($("hole").value));
+  const brand = brands.find(b => b.id === brandId);
+  if (!course || !hole || !$("prize").value.trim()) return show("createMsg", "Pick a course and hole and name the prize.", true);
+  const row = {
+    brand_id: brandId, brand: brand.name, prize: $("prize").value.trim(), detail: $("detail").value.trim(),
+    course_id: course.id, hole: hole.number, lat: hole.greenCenter.latitude, lon: hole.greenCenter.longitude,
+    radius_m: Number($("radius").value) * 0.9144, challenge: $("challenge").value, remaining: Number($("qty").value),
+    starts_at: new Date($("starts").value).toISOString(), expires_at: new Date($("ends").value + "T23:59:59").toISOString(),
+  };
+  if (live) {
+    const { error } = await db.from("drops").insert(row);
+    if (error) return show("createMsg", error.message, true);
+    await loadAll();
+  } else {
+    stats.unshift({ ...row, id: crypto.randomUUID(), course_name: course.name, golfers_reached: 0, prizes_claimed: 0, codes_redeemed: 0 });
+    render();
+  }
+  show("createMsg", `Live! Golfers on hole ${hole.number} at ${course.name} can now win "${row.prize}".`);
+  $("prize").value = ""; $("detail").value = "";
+}
+
+async function redeem() {
+  const code = $("redeemCode").value.trim();
+  if (!code) return;
+  if (!live) return show("redeemMsg", `Demo: ${code.toUpperCase()} marked as used.`);
+  const { data, error } = await db.rpc("redeem_code", { p_code: code });
+  if (error) return show("redeemMsg", error.message, true);
+  show("redeemMsg", `Redeemed: ${data}`);
+  $("redeemCode").value = "";
+  loadAll();
+}
+
+// ---------- UI ----------
+function show(id, text, err = false) { const el = $(id); el.textContent = text; el.className = "msg" + (err ? " err" : ""); }
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function render() {
+  $("signin").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("brandSelect").classList.toggle("hidden", brands.length < 2);
+  $("brandSelect").innerHTML = brands.map(b => `<option value="${b.id}" ${b.id === brandId ? "selected" : ""}>${esc(b.name)}</option>`).join("");
+  const now = Date.now(), liveDrops = stats.filter(s => new Date(s.expires_at) > now && s.remaining > 0);
+  const sum = (k) => stats.reduce((t, s) => t + Number(s[k] || 0), 0);
+  $("kDrops").textContent = liveDrops.length;
+  $("kReached").textContent = sum("golfers_reached");
+  $("kClaimed").textContent = sum("prizes_claimed");
+  $("kRedeemed").textContent = sum("codes_redeemed");
+  $("stats").innerHTML = stats.length ? stats.map(s => `<tr>
+      <td><b>${esc(s.prize)}</b></td><td>${esc(s.course_name)}</td><td>${s.hole}</td>
+      <td><span class="pill">${challengeLabel[s.challenge] || s.challenge}</span></td><td>${s.remaining}</td>
+      <td>${s.golfers_reached}</td><td>${s.prizes_claimed}</td><td>${s.codes_redeemed}</td>
+      <td>${new Date(s.expires_at).toLocaleDateString()}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="note">No drops yet. Place your first one above.</td></tr>`;
+  const current = $("course").value;
+  $("course").innerHTML = courses.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+  if (current) $("course").value = current;
+  fillHoles();
+}
+
+function fillHoles() {
+  const course = courses.find(c => c.id === $("course").value);
+  const keep = $("hole").value;
+  $("hole").innerHTML = (course?.data.holes || []).map(h => `<option value="${h.number}">${h.number} (par ${h.par})</option>`).join("");
+  if (keep) $("hole").value = keep;
+  drawZone();
+}
+
+let map, zone, pin;
+function drawZone() {
+  const course = courses.find(c => c.id === $("course").value);
+  const hole = course?.data.holes.find(h => h.number === Number($("hole").value));
+  if (!hole) return;
+  const center = [hole.greenCenter.latitude, hole.greenCenter.longitude];
+  if (!map) {
+    map = L.map("map", { zoomControl: true }).setView(center, 17);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Imagery © Esri" }).addTo(map);
+  }
+  zone?.remove(); pin?.remove();
+  zone = L.circle(center, { radius: Number($("radius").value) * 0.9144, color: "#f2b821", fillColor: "#f2b821", fillOpacity: 0.25, weight: 3 }).addTo(map);
+  pin = L.circleMarker(center, { radius: 7, color: "#fff", weight: 2, fillColor: "#c0392b", fillOpacity: 1 }).addTo(map).bindTooltip(`Hole ${hole.number} pin`);
+  map.setView(center, 17);
+}
+
+function defaultDates() {
+  const today = new Date(), later = new Date(Date.now() + 14 * 864e5);
+  $("starts").value = today.toISOString().slice(0, 10);
+  $("ends").value = later.toISOString().slice(0, 10);
+}
+
+// ---------- Sign-in ----------
+async function sendCode() {
+  const { error } = await db.auth.signInWithOtp({ email: $("email").value.trim(), options: { shouldCreateUser: false } });
+  if (error) return show("signinMsg", error.message, true);
+  $("codeBox").classList.remove("hidden");
+  show("signinMsg", "Check your email for the code.");
+}
+async function verify() {
+  const { error } = await db.auth.verifyOtp({ email: $("email").value.trim(), token: $("code").value.trim(), type: "email" });
+  if (error) return show("signinMsg", error.message, true);
+  start();
+}
+async function start() {
+  try { await loadAll(); } catch (e) { show("signinMsg", e.message || String(e), true); }
+}
+
+$("course").addEventListener("change", fillHoles);
+$("hole").addEventListener("change", drawZone);
+$("radius").addEventListener("input", drawZone);
+$("create").addEventListener("click", createDrop);
+$("redeem").addEventListener("click", redeem);
+$("brandSelect").addEventListener("change", (e) => { brandId = e.target.value; loadAll(); });
+$("sendCode").addEventListener("click", sendCode);
+$("verify").addEventListener("click", verify);
+$("signOut").addEventListener("click", async () => { await db.auth.signOut(); location.reload(); });
+defaultDates();
+
+(async () => {
+  if (!live) return start();
+  $("modeTag").textContent = "Live";
+  $("signOut").classList.remove("hidden");
+  const { data } = await db.auth.getSession();
+  if (data.session) start(); else $("signin").classList.remove("hidden");
+})();
+</script>
+</body>
+</html>

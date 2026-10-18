@@ -1,17 +1,44 @@
 import Foundation
 
-/// Everything Gimme needs from a server. `MockBackend` runs fully offline for the prototype;
-/// a `SupabaseBackend` implementing the same protocol plugs in next (see supabase/schema.sql).
+/// Live changes to a round from other phones in the group.
+enum RoundEvent {
+    case score(playerId: String, hole: Int, strokes: Int?)
+    case chat(ChatMessage)
+}
+
+/// Everything Gimme needs from a server. `MockBackend` runs fully offline with sample data;
+/// `SupabaseBackend` talks to the real database (see supabase/schema.sql).
 protocol GimmeBackend {
-    func currentUser() async throws -> Player
+    // Account
+    /// The signed-in golfer, or nil when nobody is signed in.
+    func currentUser() async throws -> Player?
+    func sendSignInCode(email: String) async throws
+    func verifySignInCode(email: String, code: String) async throws -> Player
+    func updateProfile(name: String, avatar: String) async throws -> Player
+    func signOut() async throws
+
+    // Friends and feed
     func friends() async throws -> [Player]
+    func addFriend(handle: String) async throws
     func feed() async throws -> [FeedPost]
     func publish(_ post: FeedPost) async throws
+
+    // Rounds
+    func startRound(_ round: Round, course: Course) async throws -> Round
+    func saveScore(round: Round, playerId: String, hole: Int, strokes: Int?) async throws
+    func sendChat(_ message: ChatMessage, round: Round) async throws
+    func roundEvents(_ round: Round) -> AsyncStream<RoundEvent>
+    func finish(_ round: Round) async throws
+    func pastRounds() async throws -> [Round]
+
+    // Drops
     func drops(for course: Course) async throws -> [Drop]
-    /// The server re-checks everything: active round, inside the geofence, prize left,
-    /// one claim per golfer, and the hole challenge if there is one.
-    func claim(drop: Drop, round: Round, at point: Coordinate, holeStrokes: Int?) async throws -> WonPrize
-    func save(_ round: Round) async throws
+    /// Records that the golfer is inside the drop's geofence during an active round.
+    /// The server re-checks the position, the round and the dates.
+    func visit(drop: Drop, round: Round, at point: Coordinate) async throws
+    /// The server checks the visit, stock left, one claim per golfer and the hole challenge.
+    func claim(drop: Drop, round: Round) async throws -> WonPrize
+    func wallet() async throws -> [WonPrize]
 }
 
 enum ClaimError: LocalizedError {
@@ -28,8 +55,10 @@ enum ClaimError: LocalizedError {
     }
 }
 
+/// Offline backend with sample friends and sponsors. Friends in your group "play along":
+/// their scores arrive a little after yours, so the live scorecard can be tried solo.
 actor MockBackend: GimmeBackend {
-    private let me = Player(id: "me", name: "You", avatar: "🏌️", handicap: nil)
+    private var me: Player?
     private var friendList = [
         Player(id: "jake", name: "Jake", avatar: "🧢", handicap: 8.4, playingNow: "Hole 6 at Pine Ridge"),
         Player(id: "maria", name: "Maria", avatar: "⛳️", handicap: 14.2),
@@ -38,8 +67,10 @@ actor MockBackend: GimmeBackend {
     ]
     private var posts: [FeedPost] = []
     private var stock: [String: Int] = [:]
-    private var claimed = Set<String>()
-    private var rounds: [Round] = []
+    private var visits = Set<String>()
+    private var prizes: [WonPrize] = []
+    private var rounds: [UUID: Round] = [:]
+    private var listeners: [UUID: AsyncStream<RoundEvent>.Continuation] = [:]
 
     init() {
         posts = [
@@ -52,14 +83,115 @@ actor MockBackend: GimmeBackend {
         ]
     }
 
-    func currentUser() async throws -> Player { me }
+    // MARK: Account
+
+    func currentUser() async throws -> Player? { me }
+
+    func sendSignInCode(email: String) async throws {}
+
+    func verifySignInCode(email: String, code: String) async throws -> Player {
+        let player = Player(id: "me", name: email.components(separatedBy: "@").first ?? "You", avatar: "🏌️")
+        me = player
+        return player
+    }
+
+    func updateProfile(name: String, avatar: String) async throws -> Player {
+        let player = Player(id: "me", name: name, avatar: avatar)
+        me = player
+        return player
+    }
+
+    func signOut() async throws { me = nil }
+
+    // MARK: Friends and feed
+
     func friends() async throws -> [Player] { friendList }
+
+    func addFriend(handle: String) async throws {
+        let name = handle.trimmingCharacters(in: CharacterSet(charactersIn: "@ ")).capitalized
+        guard !name.isEmpty, !friendList.contains(where: { $0.name == name }) else { return }
+        friendList.append(Player(id: name.lowercased(), name: name, avatar: "🙂"))
+    }
+
     func feed() async throws -> [FeedPost] { posts.sorted { $0.postedAt > $1.postedAt } }
     func publish(_ post: FeedPost) async throws { posts.append(post) }
-    func save(_ round: Round) async throws {
-        rounds.removeAll { $0.id == round.id }
-        rounds.append(round)
+
+    // MARK: Rounds
+
+    func startRound(_ round: Round, course: Course) async throws -> Round {
+        rounds[round.id] = round
+        return round
     }
+
+    func saveScore(round: Round, playerId: String, hole: Int, strokes: Int?) async throws {
+        rounds[round.id]?.setStrokes(strokes, for: playerId, hole: hole)
+        guard playerId == "me", strokes != nil, let saved = rounds[round.id] else { return }
+        // Friends finish the same hole a few seconds after you.
+        for friend in saved.players where friend.id != "me" && saved.strokes(friend.id, hole: hole) == nil {
+            let par = saved.pars[hole - 1]
+            let skill = friend.handicap ?? 18
+            let roll = Double.random(in: 0...1)
+            let parChance: Double = 0.25 + (36 - skill) / 60
+            var strokes = par + 2
+            if roll < 0.12 {
+                strokes = par - 1
+            } else if roll < parChance {
+                strokes = par
+            } else if roll < 0.85 {
+                strokes = par + 1
+            }
+            let delay = UInt64.random(in: 2...8) * 1_000_000_000
+            let id = round.id, friendId = friend.id, score = strokes
+            Task {
+                try? await Task.sleep(nanoseconds: delay)
+                await self.friendScored(roundId: id, playerId: friendId, hole: hole, strokes: score)
+            }
+        }
+    }
+
+    private func friendScored(roundId: UUID, playerId: String, hole: Int, strokes: Int) {
+        rounds[roundId]?.setStrokes(strokes, for: playerId, hole: hole)
+        listeners[roundId]?.yield(.score(playerId: playerId, hole: hole, strokes: strokes))
+    }
+
+    func sendChat(_ message: ChatMessage, round: Round) async throws {
+        guard let friend = round.players.first(where: { $0.id != "me" }) else { return }
+        let replies = ["Nice one 👏", "Hit it straight this time 😂", "Drinks on the turn?", "Let's go!", "🔥🔥"]
+        let reply = ChatMessage(author: friend, text: replies.randomElement()!)
+        let id = round.id
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await self.push(.chat(reply), to: id)
+        }
+    }
+
+    private func push(_ event: RoundEvent, to roundId: UUID) {
+        listeners[roundId]?.yield(event)
+    }
+
+    nonisolated func roundEvents(_ round: Round) -> AsyncStream<RoundEvent> {
+        AsyncStream { continuation in
+            Task { await self.listen(round.id, continuation) }
+        }
+    }
+
+    private func listen(_ id: UUID, _ continuation: AsyncStream<RoundEvent>.Continuation) {
+        listeners[id] = continuation
+    }
+
+    func finish(_ round: Round) async throws {
+        var finished = round
+        finished.isActive = false
+        rounds[round.id] = finished
+        listeners[round.id]?.finish()
+        listeners[round.id] = nil
+    }
+
+    func pastRounds() async throws -> [Round] {
+        rounds.values.filter { !$0.isActive }.sorted { $0.date > $1.date }
+    }
+
+    // MARK: Drops
 
     /// Sample sponsors on four holes of any course, ringed around each green.
     func drops(for course: Course) async throws -> [Drop] {
@@ -80,22 +212,40 @@ actor MockBackend: GimmeBackend {
         }
     }
 
-    func claim(drop: Drop, round: Round, at point: Coordinate, holeStrokes: Int?) async throws -> WonPrize {
+    func visit(drop: Drop, round: Round, at point: Coordinate) async throws {
         guard round.isActive, round.courseId == drop.courseId else { throw ClaimError.roundNotActive }
         guard drop.contains(point) else { throw ClaimError.outsideHole }
-        guard !claimed.contains(drop.id) else { throw ClaimError.alreadyClaimed }
+        visits.insert(drop.id)
+    }
+
+    func claim(drop: Drop, round: Round) async throws -> WonPrize {
+        guard visits.contains(drop.id) else { throw ClaimError.outsideHole }
+        guard !prizes.contains(where: { $0.drop.id == drop.id }) else { throw ClaimError.alreadyClaimed }
         let left = stock[drop.id] ?? drop.remaining
         guard left > 0 else { throw ClaimError.soldOut }
         if drop.challenge != .none {
-            guard let holeStrokes, drop.challenge.isMet(strokes: holeStrokes, par: round.pars[drop.holeNumber - 1]) else {
+            guard let strokes = round.strokes("me", hole: drop.holeNumber),
+                  drop.challenge.isMet(strokes: strokes, par: round.pars[drop.holeNumber - 1]) else {
                 throw ClaimError.challengeNotMet
             }
         }
         stock[drop.id] = left - 1
-        claimed.insert(drop.id)
         var won = drop
         won.remaining = left - 1
-        let code = "GIMME-" + String(UUID().uuidString.prefix(6))
-        return WonPrize(drop: won, code: code)
+        let prize = WonPrize(drop: won, code: "GIMME-" + String(UUID().uuidString.prefix(6)))
+        prizes.insert(prize, at: 0)
+        return prize
+    }
+
+    func wallet() async throws -> [WonPrize] { prizes }
+}
+
+enum BackendFactory {
+    /// Supabase when the app is configured for it, otherwise the offline demo backend.
+    static func make() -> any GimmeBackend {
+        #if canImport(Supabase)
+        if let live = SupabaseBackend.fromInfoPlist() { return live }
+        #endif
+        return MockBackend()
     }
 }

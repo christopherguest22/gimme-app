@@ -54,23 +54,76 @@ final class ScoringTests: XCTestCase {
 }
 
 final class DropTests: XCTestCase {
-    func testClaimRequiresBeingOnTheHole() async throws {
+    func testClaimRequiresAVisitOnTheHole() async throws {
         let backend = MockBackend()
         let course = DemoCourse.make(firstTee: Coordinate(33.0, -117.0))
         let round = Round(course: course, players: [Player(id: "me", name: "Me", avatar: "🏌️")])
         let drop = try await backend.drops(for: course).first { $0.challenge == .none }!
 
         do {
-            _ = try await backend.claim(drop: drop, round: round, at: course.holes[0].tee, holeStrokes: nil)
-            XCTFail("Claim from the wrong place should fail")
+            try await backend.visit(drop: drop, round: round, at: course.holes[0].tee)
+            XCTFail("A visit from the wrong place should fail")
+        } catch {}
+        do {
+            _ = try await backend.claim(drop: drop, round: round)
+            XCTFail("Claim without a visit should fail")
         } catch {}
 
-        let prize = try await backend.claim(drop: drop, round: round, at: drop.center, holeStrokes: nil)
+        try await backend.visit(drop: drop, round: round, at: drop.center)
+        let prize = try await backend.claim(drop: drop, round: round)
         XCTAssertEqual(prize.drop.remaining, drop.remaining - 1)
 
         do {
-            _ = try await backend.claim(drop: drop, round: round, at: drop.center, holeStrokes: nil)
+            _ = try await backend.claim(drop: drop, round: round)
             XCTFail("Second claim should fail")
         } catch {}
+    }
+
+    func testChallengeDropNeedsTheScore() async throws {
+        let backend = MockBackend()
+        let course = DemoCourse.make(firstTee: Coordinate(33.0, -117.0))
+        var round = Round(course: course, players: [Player(id: "me", name: "Me", avatar: "🏌️")])
+        let drop = try await backend.drops(for: course).first { $0.challenge == .parOrBetter }!
+        try await backend.visit(drop: drop, round: round, at: drop.center)
+
+        round.setStrokes(round.pars[drop.holeNumber - 1] + 1, for: "me", hole: drop.holeNumber)
+        do {
+            _ = try await backend.claim(drop: drop, round: round)
+            XCTFail("Bogey should not win a par-or-better drop")
+        } catch {}
+
+        round.setStrokes(round.pars[drop.holeNumber - 1], for: "me", hole: drop.holeNumber)
+        _ = try await backend.claim(drop: drop, round: round)
+    }
+}
+
+final class SideGameTests: XCTestCase {
+    private let course = DemoCourse.make(firstTee: Coordinate(33.0, -117.0))
+    private let a = Player(id: "a", name: "A", avatar: "🅰️")
+    private let b = Player(id: "b", name: "B", avatar: "🅱️")
+
+    func testSkinsCarryOverOnTies() {
+        var round = Round(course: course, players: [a, b])
+        // Hole 1 tied, hole 2 won by A (worth 2), hole 3 won by B.
+        for (hole, scores) in [(1, (4, 4)), (2, (3, 4)), (3, (4, 3))] {
+            round.setStrokes(scores.0, for: "a", hole: hole)
+            round.setStrokes(scores.1, for: "b", hole: hole)
+        }
+        let result = Scoring.skins(round)
+        XCTAssertEqual(result.skins["a"], 2)
+        XCTAssertEqual(result.skins["b"], 1)
+        XCTAssertEqual(result.carryover, 0)
+    }
+
+    func testNassauLeader() {
+        var round = Round(course: course, players: [a, b])
+        for hole in 1...9 {
+            round.setStrokes(4, for: "a", hole: hole)
+            round.setStrokes(5, for: "b", hole: hole)
+        }
+        let legs = Scoring.nassau(round)
+        XCTAssertEqual(legs.first { $0.name == "Front 9" }?.leader, "a")
+        XCTAssertEqual(legs.first { $0.name == "Front 9" }?.margin, 9)
+        XCTAssertEqual(legs.first { $0.name == "Back 9" }?.holesCounted, 0)
     }
 }

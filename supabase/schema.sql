@@ -5,10 +5,23 @@
 create table profiles (
   id uuid primary key references auth.users on delete cascade,
   name text not null,
+  handle text unique not null,            -- what friends type to add you
   avatar text not null default '🏌️',
   handicap numeric(3,1),
   share_location boolean not null default true
 );
+
+-- Every new sign-in gets a profile, named from the email address.
+create function handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
+declare base text := lower(regexp_replace(split_part(new.email, '@', 1), '[^a-zA-Z0-9]', '', 'g'));
+begin
+  insert into profiles (id, name, handle)
+  values (new.id, initcap(base), base || floor(random() * 9000 + 1000)::int);
+  return new;
+end $$;
+
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function handle_new_user();
 
 create table friendships (
   user_id uuid references profiles on delete cascade,
@@ -63,8 +76,21 @@ create table feed_posts (
   posted_at timestamptz not null default now()
 );
 
+-- Brands and the people who manage their campaigns in the brand dashboard.
+create table brands (
+  id uuid primary key default gen_random_uuid(),
+  name text not null
+);
+
+create table brand_members (
+  brand_id uuid references brands on delete cascade,
+  user_id uuid references profiles on delete cascade,
+  primary key (brand_id, user_id)
+);
+
 create table drops (
   id uuid primary key default gen_random_uuid(),
+  brand_id uuid references brands,
   brand text not null,
   prize text not null,
   detail text not null default '',
@@ -154,6 +180,43 @@ begin
   return new_code;
 end $$;
 
+-- Adds a friend by handle, both ways, so you see each other's rounds in the feed.
+create function add_friend(p_handle text) returns void language plpgsql security definer set search_path = public as $$
+declare other uuid;
+begin
+  select id into other from profiles where handle = lower(p_handle);
+  if other is null then raise exception 'No golfer with that handle'; end if;
+  if other = auth.uid() then raise exception 'That is you!'; end if;
+  insert into friendships (user_id, friend_id, status) values (auth.uid(), other, 'accepted'), (other, auth.uid(), 'accepted')
+    on conflict (user_id, friend_id) do update set status = 'accepted';
+end $$;
+
+create function is_brand_member(b uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from brand_members where brand_id = b and user_id = auth.uid())
+$$;
+
+-- Brand staff mark a prize code as used (at the counter or when an online order ships).
+create function redeem_code(p_code text) returns text language plpgsql security definer set search_path = public as $$
+declare c drop_claims; d drops;
+begin
+  select * into c from drop_claims where code = upper(p_code);
+  if c.code is null then raise exception 'Code not found'; end if;
+  select * into d from drops where id = c.drop_id;
+  if not is_brand_member(d.brand_id) then raise exception 'This code belongs to another brand'; end if;
+  if c.redeemed_at is not null then raise exception 'Already redeemed on %', c.redeemed_at::date; end if;
+  update drop_claims set redeemed_at = now() where drop_id = c.drop_id and user_id = c.user_id;
+  return d.prize;
+end $$;
+
+-- Campaign results for the brand dashboard.
+create view brand_drop_stats with (security_invoker = true) as
+  select d.id, d.brand_id, d.brand, d.prize, d.course_id, c.name as course_name, d.hole, d.challenge,
+         d.remaining, d.starts_at, d.expires_at,
+         (select count(*) from drop_visits v where v.drop_id = d.id) as golfers_reached,
+         (select count(*) from drop_claims k where k.drop_id = d.id) as prizes_claimed,
+         (select count(*) from drop_claims k where k.drop_id = d.id and k.redeemed_at is not null) as codes_redeemed
+  from drops d join courses c on c.id = d.course_id;
+
 -- Row-level security: golfers see their own data, their friends', and their rounds.
 alter table profiles enable row level security;
 alter table friendships enable row level security;
@@ -166,6 +229,8 @@ alter table drops enable row level security;
 alter table drop_visits enable row level security;
 alter table drop_claims enable row level security;
 alter table courses enable row level security;
+alter table brands enable row level security;
+alter table brand_members enable row level security;
 
 create function is_friend(other uuid) returns boolean language sql stable as $$
   select exists (select 1 from friendships
@@ -180,7 +245,17 @@ create policy "profiles readable" on profiles for select using (true);
 create policy "own profile" on profiles for all using (id = auth.uid());
 create policy "own friendships" on friendships for all using (auth.uid() in (user_id, friend_id));
 create policy "courses readable" on courses for select using (true);
-create policy "drops readable" on drops for select using (now() < expires_at);
+create policy "golfers add courses" on courses for insert to authenticated with check (true);
+create policy "golfers refresh courses" on courses for update to authenticated using (true);
+create policy "drops readable" on drops for select using (now() < expires_at or is_brand_member(brand_id));
+create policy "brands create drops" on drops for insert with check (is_brand_member(brand_id));
+create policy "brands edit drops" on drops for update using (is_brand_member(brand_id));
+create policy "my brands" on brands for select using (is_brand_member(id));
+create policy "my brand memberships" on brand_members for select using (user_id = auth.uid());
+create policy "brand sees its visits" on drop_visits for select
+  using (exists (select 1 from drops d where d.id = drop_id and is_brand_member(d.brand_id)));
+create policy "brand sees its claims" on drop_claims for select
+  using (exists (select 1 from drops d where d.id = drop_id and is_brand_member(d.brand_id)));
 create policy "rounds I play" on rounds for select using (in_round(id) or created_by = auth.uid());
 create policy "start rounds" on rounds for insert with check (created_by = auth.uid());
 create policy "finish my rounds" on rounds for update using (created_by = auth.uid());
@@ -193,7 +268,8 @@ create policy "post chat" on chat_messages for insert with check (in_round(round
 create policy "feed from friends" on feed_posts for select using (author_id = auth.uid() or is_friend(author_id));
 create policy "post to feed" on feed_posts for insert with check (author_id = auth.uid());
 create policy "my claims" on drop_claims for select using (user_id = auth.uid());
--- drop_visits and drop_claims are only written through visit_drop() and claim_drop().
+-- drop_visits and drop_claims are only written through visit_drop(), claim_drop() and redeem_code().
+-- New brands are set up by you in the Supabase table editor: add a row to brands and to brand_members.
 
 -- Live scorecard and chat: phones subscribe to these tables.
 alter publication supabase_realtime add table scores, chat_messages;

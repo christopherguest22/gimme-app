@@ -11,6 +11,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var isSimulating = false
 
     private let manager: CLLocationManager
+    @ObservationIgnored private var backgroundSession: CLBackgroundActivitySession?
 
     override init() {
         let manager = CLLocationManager()
@@ -27,13 +28,21 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.requestWhenInUseAuthorization()
     }
 
-    /// Full-accuracy updates during a round; stop afterwards to save battery.
+    /// Full-accuracy updates during a round, kept running with the phone in a pocket so drops
+    /// still unlock (needs the "location" background mode). Stopped afterwards to save battery.
     func startRound() {
+        manager.allowsBackgroundLocationUpdates = true
+        manager.showsBackgroundLocationIndicator = true
+        manager.pausesLocationUpdatesAutomatically = false
+        if backgroundSession == nil { backgroundSession = CLBackgroundActivitySession() }
         manager.startUpdatingLocation()
     }
 
     func stopRound() {
         manager.stopUpdatingLocation()
+        manager.allowsBackgroundLocationUpdates = false
+        backgroundSession?.invalidate()
+        backgroundSession = nil
     }
 
     func simulate(_ point: Coordinate?) {

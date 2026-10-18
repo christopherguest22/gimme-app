@@ -7,72 +7,119 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    if let round = app.round {
-                        Button {
-                            startRound()
-                        } label: {
-                            Label("Back to your round at \(round.courseName)", systemImage: "flag.fill")
-                                .font(.headline)
-                        }
-                    } else {
-                        Button {
-                            choosingCourse = true
-                        } label: {
-                            Label("Start a round", systemImage: "play.circle.fill")
-                                .font(.title3.bold())
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 8)
-                        }
-                    }
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    hero
 
-                let playing = app.friends.filter { $0.playingNow != nil }
-                if !playing.isEmpty {
-                    Section("Friends playing now") {
+                    let playing = app.friends.filter { $0.playingNow != nil }
+                    if !playing.isEmpty {
+                        sectionTitle("Friends playing now")
                         ForEach(playing) { friend in
-                            HStack {
-                                Text(friend.avatar).font(.title2)
+                            HStack(spacing: 12) {
+                                AvatarView(player: friend)
                                 VStack(alignment: .leading) {
                                     Text(friend.name).font(.headline)
                                     Text(friend.playingNow ?? "").font(.subheadline).foregroundStyle(.secondary)
                                 }
-                            }
-                        }
-                    }
-                }
-
-                Section("Prize drops on this course") {
-                    if app.drops.isEmpty {
-                        Text("Start a round to see which holes have drops.")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(app.drops) { drop in
-                        DropRow(drop: drop)
-                    }
-                }
-
-                if !app.pastRounds.isEmpty {
-                    Section("Recent rounds") {
-                        ForEach(app.pastRounds) { round in
-                            HStack {
-                                Text(round.courseName)
                                 Spacer()
-                                Text("\(round.total(app.me.id))").bold()
+                                Circle().fill(.green).frame(width: 10, height: 10)
+                            }
+                            .gimmeCard()
+                        }
+                    }
+
+                    sectionTitle(app.round == nil ? "How prize drops work" : "Prize drops on this course")
+                    if app.drops.isEmpty {
+                        HStack(spacing: 14) {
+                            Image(systemName: "gift.fill").font(.largeTitle).foregroundStyle(Color.gimmeGold)
+                            Text("Brands hide prizes on holes. Look for the gold flag, reach the green during your round, and the prize is yours.")
+                                .font(.subheadline)
+                        }
+                        .gimmeCard(highlight: .gimmeGold)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(app.drops) { drop in DropCard(drop: drop) }
                             }
                         }
                     }
+
+                    if !app.pastRounds.isEmpty {
+                        sectionTitle("Recent rounds")
+                        ForEach(app.pastRounds.prefix(5)) { round in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(round.courseName).font(.headline)
+                                    Text(round.date.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text("\(round.total(app.myId))").font(.gimme(24, .bold))
+                                Text(Scoring.formatToPar(round.toPar(app.myId))).foregroundStyle(.secondary)
+                            }
+                            .gimmeCard()
+                        }
+                    }
                 }
+                .padding()
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Gimme")
             .sheet(isPresented: $choosingCourse) {
                 StartRoundView { startRound() }
             }
         }
     }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Hey \(app.me?.name ?? "golfer") 👋")
+                .font(.gimme(26, .bold))
+                .foregroundStyle(.white)
+            if let round = app.round {
+                Text("You're on hole \(app.currentHole) at \(round.courseName).")
+                    .foregroundStyle(.white.opacity(0.9))
+                Button("Back to your round", action: startRound).buttonStyle(.gimmePrize)
+            } else {
+                Text("Track every shot, play with your crew, and win gear on the course.")
+                    .foregroundStyle(.white.opacity(0.9))
+                Button("Start a round") { choosingCourse = true }.buttonStyle(.gimmePrize)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient.gimmeFairway, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text).font(.gimme(20, .bold)).padding(.top, 4)
+    }
 }
 
+struct DropCard: View {
+    let drop: Drop
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "flag.fill").foregroundStyle(Color.gimmeGold)
+                Text("Hole \(drop.holeNumber)").font(.headline)
+                Spacer()
+                Text("\(drop.remaining) left")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.gimmeGold.opacity(0.25), in: Capsule())
+            }
+            Text(drop.brand).font(.caption.bold()).foregroundStyle(.secondary)
+            Text(drop.prize).font(.gimme(17, .semibold)).lineLimit(2)
+            Text(drop.challenge.label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(width: 220, alignment: .leading)
+        .gimmeCard(highlight: .gimmeGold)
+    }
+}
+
+/// Kept for list layouts (the scorecard and brand screens).
 struct DropRow: View {
     let drop: Drop
 
@@ -111,14 +158,19 @@ struct StartRoundView: View {
         NavigationStack {
             List {
                 Section("Who's playing") {
+                    if app.friends.isEmpty {
+                        Text("Add friends on the Friends tab to play together.").foregroundStyle(.secondary)
+                    }
                     ForEach(app.friends) { friend in
                         Button {
                             if group.contains(friend.id) { group.remove(friend.id) } else { group.insert(friend.id) }
                         } label: {
                             HStack {
-                                Text("\(friend.avatar)  \(friend.name)")
+                                AvatarView(player: friend, size: 34)
+                                Text(friend.name)
                                 Spacer()
-                                if group.contains(friend.id) { Image(systemName: "checkmark.circle.fill") }
+                                Image(systemName: group.contains(friend.id) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(Color.gimmeGreen)
                             }
                         }
                         .foregroundStyle(.primary)
@@ -143,7 +195,19 @@ struct StartRoundView: View {
                 Section {
                     if searching { ProgressView() }
                     ForEach(nearby) { course in
-                        Button(course.name) { load(course) }
+                        Button {
+                            load(course)
+                        } label: {
+                            HStack {
+                                Text(course.name)
+                                Spacer()
+                                if let here = location.coordinate {
+                                    Text(String(format: "%.1f mi", Geo.meters(here, course.center) / 1609.34))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .foregroundStyle(.primary)
                     }
                     if let error { Text(error).font(.caption).foregroundStyle(.red) }
                 } header: {
@@ -165,8 +229,10 @@ struct StartRoundView: View {
     private func start(_ course: Course) {
         Task {
             await app.startRound(on: course, with: players)
-            dismiss()
-            onStart()
+            if app.round != nil {
+                dismiss()
+                onStart()
+            }
         }
     }
 

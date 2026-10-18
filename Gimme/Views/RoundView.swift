@@ -41,11 +41,9 @@ struct RoundView: View {
                             Task {
                                 await app.finishRound()
                                 location.simulate(nil)
-                                location.stopRound()
                             }
                         }
                     }
-                    .onAppear { location.startRound() }
                 } else {
                     ContentUnavailableView("No round in progress",
                                            systemImage: "flag",
@@ -63,7 +61,8 @@ struct ScorecardView: View {
     let round: Round
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
+        ScrollView {
+            ScrollView(.horizontal) {
             Grid(horizontalSpacing: 0, verticalSpacing: 0) {
                 GridRow {
                     cell("Hole", bold: true, wide: true)
@@ -96,6 +95,10 @@ struct ScorecardView: View {
                 }
             }
             .padding()
+            }
+            if round.players.count > 1 {
+                SideGamesView(round: round).padding(.horizontal)
+            }
         }
     }
 
@@ -114,8 +117,8 @@ struct ScorecardView: View {
                 .font(.subheadline.bold())
                 .frame(width: 26, height: 26)
                 .overlay {
-                    if strokes < par { Circle().stroke(Color.red, lineWidth: 1.5) }
-                    else if strokes > par { Rectangle().stroke(Color.blue, lineWidth: 1.5) }
+                    if strokes < par { Circle().stroke(Color.gimmeBirdie, lineWidth: 1.5) }
+                    else if strokes > par { Rectangle().stroke(Color.gimmeBogey, lineWidth: 1.5) }
                 }
                 .frame(width: 36, height: 36)
         } else {
@@ -134,18 +137,29 @@ struct RoundChatView: View {
         VStack(spacing: 0) {
             ScrollViewReader { scroller in
                 List(app.chat) { message in
-                    HStack(alignment: .top) {
-                        Text(message.author.avatar)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(message.author.name).font(.caption.bold())
+                    let mine = message.author.id == app.myId
+                    HStack(alignment: .bottom, spacing: 8) {
+                        if mine { Spacer(minLength: 40) } else { AvatarView(player: message.author, size: 30) }
+                        VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
+                            if !mine { Text(message.author.name).font(.caption.bold()).foregroundStyle(.secondary) }
                             Text(message.text)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .foregroundStyle(mine ? Color.white : Color.primary)
+                                .background(mine ? Color.gimmeGreen : Color(.secondarySystemBackground),
+                                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            Text(message.sentAt, style: .time).font(.caption2).foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Text(message.sentAt, style: .time).font(.caption2).foregroundStyle(.secondary)
+                        if !mine { Spacer(minLength: 40) }
                     }
+                    .listRowSeparator(.hidden)
                     .id(message.id)
                 }
                 .listStyle(.plain)
+                .overlay {
+                    if app.chat.isEmpty {
+                        ContentUnavailableView("Say something to your group", systemImage: "bubble.left.and.bubble.right")
+                    }
+                }
                 .onChange(of: app.chat.count) {
                     if let last = app.chat.last { scroller.scrollTo(last.id) }
                 }
@@ -166,5 +180,63 @@ struct RoundChatView: View {
         guard !text.isEmpty else { return }
         app.send(text)
         draft = ""
+    }
+}
+
+// MARK: - Side games
+
+/// Skins and Nassau standings, updated as scores come in.
+struct SideGamesView: View {
+    let round: Round
+
+    private func name(_ id: String?) -> String {
+        guard let id, let player = round.players.first(where: { $0.id == id }) else { return "Tied" }
+        return "\(player.avatar) \(player.name)"
+    }
+
+    var body: some View {
+        let skins = Scoring.skins(round)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Side games").font(.gimme(20, .bold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Skins").font(.headline)
+                    Spacer()
+                    if skins.carryover > 0 {
+                        Text("\(skins.carryover + 1) skins on the next hole")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.gimmeGold.opacity(0.25), in: Capsule())
+                    }
+                }
+                ForEach(round.players) { player in
+                    HStack {
+                        Text("\(player.avatar) \(player.name)")
+                        Spacer()
+                        Text("\(skins.skins[player.id] ?? 0)").font(.gimme(17, .bold))
+                    }
+                }
+            }
+            .gimmeCard()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Nassau").font(.headline)
+                ForEach(Scoring.nassau(round)) { leg in
+                    HStack {
+                        Text(leg.name)
+                        Spacer()
+                        if leg.holesCounted == 0 {
+                            Text("Not started").foregroundStyle(.secondary)
+                        } else {
+                            Text(leg.leader == nil ? "All square" : "\(name(leg.leader)) by \(leg.margin)")
+                                .bold()
+                        }
+                    }
+                }
+            }
+            .gimmeCard()
+        }
+        .padding(.bottom)
     }
 }
