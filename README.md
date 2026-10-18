@@ -18,12 +18,30 @@ Tabs along the bottom: **Home, Community, Play, Prizes, Me.**
 
 - **Welcome and sign-in:** three intro slides, then sign-in with a 6-digit email code. In demo mode you only pick a name and avatar.
 - **Home:** a big Play or Resume card, your handicap, rounds and prizes, friends on the course now, and prize drops near you.
-- **Play (center button):** pick a course, then the hole fills the screen. Front, middle and back yardages sit on the right, hazard distances sit on the map, and tap-to-measure shows distance to a target and to the pin. The bottom panel switches holes and keeps score for everyone with plus and minus buttons. Holes with a prize drop show a gold zone around the green. While a round is running the Play button turns gold and says Resume.
+- **Play (center button):** pick a course and your tees, then the hole fills the screen as a satellite photo, laid out like 18Birdies. Across the top: hole number, distance to the hole, par, your tee's yardage and the hole's handicap (stroke index). On the right: the distance in a black circle with the plays-like yardage and a club next to it, a Green tile (back, middle, front), a Wind tile (arrow turned to the hole) and Tools (change tees, undo a shot, finish the round). On the left: Recenter, Scorecard and Group. Tap the map to set a target and see both legs of the shot. Along the bottom: previous hole, Track Shot (marks where each shot was hit and how far it went), Enter Score and the next hole. While a round is running the Play button turns gold and says Resume.
 - **Live scorecard and chat:** buttons at the top of the hole screen. Scores update live from everyone's phones, birdies circled in gold and bogeys boxed, with skins and Nassau below. Chat is for your group during the round.
 - **Prize drops:** reach the gold zone during a round and the prize unlocks. Some drops need par or birdie first. GPS keeps running with the phone in your pocket, and you get a notification when you win.
 - **Prizes:** won prizes with copyable codes, expiry dates and redeemed status.
 - **Community:** Feed (rounds, prizes and posts), Leaderboard (friends by handicap) and Friends (add by handle).
 - **Me:** profile header with handicap, rounds, friends and prizes, your stats, and round history (tap a round for its scorecard). Edit profile and sign out are in the menu.
+
+## Satellite imagery and course data
+
+**Imagery.** Set `SatelliteProvider` in `project.yml`, then run `xcodegen` again:
+
+- `apple` (default): Apple Maps satellite photos. No key.
+- `mapbox`: Mapbox Satellite. Often sharper and more recently refreshed in many US and European areas. Create a free token at mapbox.com and paste it into `MapboxAccessToken`.
+- `esri`: Esri World Imagery. Often the sharpest on US courses (down to about 30 cm per pixel). Fine for testing; a published app needs an ArcGIS Location Platform key and their credit line.
+
+No provider shows live photos: all of them are months to a few years old, and that is true for 18Birdies too. Compare a few of your home courses on each provider and keep the sharpest.
+
+**Hole data.** Each course is put together from three free sources:
+
+- **Hole shapes** (tees, greens, bunkers, water) come from OpenStreetMap.
+- **The scorecard** (par, handicap, yardage for every tee, rating and slope) comes from OpenGolfAPI. It covers about 16,000 US courses, needs no key and is ODbL licensed, so the app credits it. If OpenStreetMap hasn't mapped a course's holes but OpenGolfAPI has tee and green positions, the holes are built from OpenGolfAPI.
+- **Elevation, wind and temperature** come from Open-Meteo. It is free for non-commercial use; a paid plan is needed once the app makes money.
+
+**Plays-like distance** uses the rules of thumb 18Birdies describes: a yard longer for each yard uphill, 1% longer per mph of headwind and 0.5% shorter per mph of tailwind, and 2 yards for every 10°F away from 75°F on a 150-yard shot. The suggested club uses typical amateur distances in `Bag.standard` for now.
 
 ## Website
 

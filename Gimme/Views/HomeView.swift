@@ -192,6 +192,8 @@ struct StartRoundView: View {
     @State private var searching = false
     @State private var group = Set<String>()
     @State private var error: String?
+    /// A loaded course waiting for the golfer to pick their tees.
+    @State private var choosingTees: Course?
 
     var body: some View {
         NavigationStack {
@@ -219,7 +221,7 @@ struct StartRoundView: View {
                 Section {
                     Button {
                         let tee = location.coordinate ?? Coordinate(37.3349, -122.0090)
-                        start(DemoCourse.make(firstTee: tee))
+                        Task { offerTees(await app.weather.addElevation(to: DemoCourse.make(firstTee: tee))) }
                     } label: {
                         VStack(alignment: .leading) {
                             Text("Gimme Demo Links").font(.headline)
@@ -252,7 +254,7 @@ struct StartRoundView: View {
                 } header: {
                     Text("Courses near you")
                 } footer: {
-                    Text("Course maps © OpenStreetMap contributors. Not every course has its holes mapped yet.")
+                    Text("Course maps © OpenStreetMap contributors. Scorecards © OpenGolfAPI (ODbL). Not every course has its holes mapped yet.")
                 }
             }
             .navigationTitle("New round")
@@ -260,14 +262,27 @@ struct StartRoundView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
             .task { await findNearby() }
+            .confirmationDialog("Which tees are you playing?",
+                                isPresented: Binding(get: { choosingTees != nil }, set: { if !$0 { choosingTees = nil } }),
+                                titleVisibility: .visible,
+                                presenting: choosingTees) { course in
+                ForEach(course.teeNames, id: \.self) { tee in
+                    Button("\(tee) · \(course.total(tee)) yds") { start(course, tee: tee) }
+                }
+            }
         }
     }
 
     private var players: [Player] { app.friends.filter { group.contains($0.id) } }
 
-    private func start(_ course: Course) {
+    /// Asks for tees when the scorecard has more than one set, otherwise starts right away.
+    private func offerTees(_ course: Course) {
+        if course.teeNames.count > 1 { choosingTees = course } else { start(course, tee: course.teeNames.first) }
+    }
+
+    private func start(_ course: Course, tee: String? = nil) {
         Task {
-            await app.startRound(on: course, with: players)
+            await app.startRound(on: course, with: players, tee: tee)
             if app.round != nil {
                 dismiss()
                 onStart()
@@ -280,7 +295,7 @@ struct StartRoundView: View {
             searching = true
             defer { searching = false }
             do {
-                start(try await app.courses.loadCourse(summary))
+                offerTees(try await app.prepareCourse(summary))
             } catch {
                 self.error = error.localizedDescription
             }

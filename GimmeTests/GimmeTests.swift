@@ -127,3 +127,80 @@ final class SideGameTests: XCTestCase {
         XCTAssertEqual(legs.first { $0.name == "Back 9" }?.holesCounted, 0)
     }
 }
+
+final class PlaysLikeTests: XCTestCase {
+    func testHeadwindAddsTenPercentAtTenMph() {
+        // Shot heading north into a wind blowing from the north.
+        let calm = Conditions(windMph: 10, windFromDegrees: 0, temperatureF: 75)
+        XCTAssertEqual(PlaysLike.yards(100, shotBearing: 0, conditions: calm).yards, 110)
+    }
+
+    func testTailwindTakesOffFivePercentAtTenMph() {
+        let wind = Conditions(windMph: 10, windFromDegrees: 180, temperatureF: 75)
+        XCTAssertEqual(PlaysLike.yards(100, shotBearing: 0, conditions: wind).yards, 95)
+    }
+
+    func testUphillPlaysLonger() {
+        // 9.144 m uphill is 10 yards.
+        XCTAssertEqual(PlaysLike.yards(150, shotBearing: 0, rise: 9.144).yards, 160)
+        XCTAssertEqual(PlaysLike.yards(150, shotBearing: 0, rise: -9.144).yards, 140)
+    }
+
+    func testColdPlaysLonger() {
+        let cold = Conditions(windMph: 0, windFromDegrees: 0, temperatureF: 55)
+        XCTAssertEqual(PlaysLike.yards(150, shotBearing: 0, conditions: cold).yards, 154)
+    }
+
+    func testClubSuggestion() {
+        XCTAssertEqual(Bag.standard.club(for: 162)?.shortName, "6i")
+        XCTAssertEqual(Bag.standard.club(for: 300)?.shortName, "Dr")
+        XCTAssertNil(Bag.standard.club(for: 20))
+    }
+}
+
+final class ScorecardTests: XCTestCase {
+    private let detail = """
+    {"course_name":"Sample Links",
+     "tees":[{"tee_key":"blue-male","tee_name":"Blue","tee_color":"blue","gender":"Male","course_rating":71.2,"slope":128,"par":72,"yardage":6600},
+             {"tee_key":"white-male","tee_name":"White","tee_color":"white","gender":"Male","course_rating":69.5,"slope":122,"par":72,"yardage":6200}],
+     "holes_data":[{"number":1,"par":4,"handicap_index":5,"yardages":{"web":411,"blue":411,"white":388},
+                    "tee_coords":null,"green":{"center":null,"front":null,"back":null},"hazards":[]},
+                   {"number":2,"par":3,"handicap_index":17,"yardages":{"blue":172,"white":150},
+                    "tee_coords":{"lat":40.001,"lng":-75.0},"green":{"center":{"lat":40.0025,"lng":-75.0},"front":null,"back":null}}]}
+    """.data(using: .utf8)!
+
+    func testParsesTeesAndHoles() throws {
+        let card = try XCTUnwrap(ScorecardService.parse(detail))
+        XCTAssertEqual(card.tees.map(\.name), ["Blue", "White"])
+        XCTAssertEqual(card.tees.first?.slope, 128)
+        XCTAssertEqual(card.holes[0].handicap, 5)
+        XCTAssertEqual(card.holes[0].yardages, ["Blue": 411, "White": 388])
+        XCTAssertEqual(card.holes[1].tee, Coordinate(40.001, -75.0))
+    }
+
+    func testMergeAddsScorecardToMappedHoles() throws {
+        let card = try XCTUnwrap(ScorecardService.parse(detail))
+        let mapped = DemoCourse.make(firstTee: Coordinate(40, -75))
+        var course = mapped
+        for i in course.holes.indices { course.holes[i].yardages = nil; course.holes[i].handicap = nil }
+        let merged = ScorecardService.merge(card, into: course)
+        XCTAssertEqual(merged.hole(1)?.yardage("blue"), 411)
+        XCTAssertEqual(merged.hole(2)?.par, 3)
+        XCTAssertEqual(merged.hole(2)?.handicap, 17)
+        XCTAssertEqual(merged.teeNames, ["Blue", "White"])
+    }
+
+    func testBuildsHolesFromScorecardWhenMapIsEmpty() throws {
+        let card = try XCTUnwrap(ScorecardService.parse(detail))
+        let empty = Course(id: "way/1", name: "Sample Links", holes: [], source: "© OpenStreetMap contributors")
+        let merged = ScorecardService.merge(card, into: empty)
+        // Only hole 2 has tee and green positions.
+        XCTAssertEqual(merged.holes.map(\.number), [2])
+    }
+
+    func testDemoCourseHasTees() {
+        let course = DemoCourse.make(firstTee: Coordinate(40, -75))
+        XCTAssertEqual(course.teeNames, ["Blue", "White", "Red"])
+        XCTAssertEqual(Set(course.holes.compactMap(\.handicap)).count, 18)
+    }
+}

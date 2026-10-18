@@ -8,6 +8,8 @@ import UserNotifications
 final class AppState {
     let backend: any GimmeBackend
     let courses = CourseService()
+    let scorecards = ScorecardService()
+    let weather = ConditionsService()
 
     /// nil until the golfer signs in (or taps "Try the demo").
     var me: Player?
@@ -18,6 +20,14 @@ final class AppState {
     var course: Course?
     var round: Round?
     var currentHole = 1
+    /// The tees the golfer plays from, for scorecard yardages ("Blue").
+    var selectedTee: String?
+    /// Wind and temperature at the course, refreshed every few minutes during a round.
+    var conditions: Conditions?
+    private var conditionsFetched: Date?
+    var bag = Bag.standard
+    /// Tracked shots on each hole: where each shot was played from, in order.
+    var shots: [Int: [Coordinate]] = [:]
     var chat: [ChatMessage] = []
     var pastRounds: [Round] = []
 
@@ -117,13 +127,52 @@ final class AppState {
 
     var hole: Hole? { course?.hole(currentHole) }
 
-    func startRound(on course: Course, with group: [Player]) async {
+    /// Builds a playable course: the hole shapes from OpenStreetMap, the scorecard (par, stroke
+    /// index, yardage per tee) from OpenGolfAPI, and tee and green heights for plays-like distances.
+    func prepareCourse(_ summary: CourseSummary) async throws -> Course {
+        var course: Course
+        var mapError: Error?
+        do {
+            course = try await courses.loadCourse(summary)
+        } catch {
+            mapError = error
+            course = Course(id: summary.id, name: summary.name, holes: [], source: "© OpenStreetMap contributors")
+        }
+        if let card = try? await scorecards.scorecard(named: summary.name, near: summary.center) {
+            course = ScorecardService.merge(card, into: course)
+        }
+        guard !course.holes.isEmpty else { throw mapError ?? CourseService.CourseError.noHoles }
+        return await weather.addElevation(to: course)
+    }
+
+    func refreshConditions(force: Bool = false) async {
+        guard let point = hole?.tee ?? course?.holes.first?.tee else { return }
+        if !force, let conditionsFetched, Date().timeIntervalSince(conditionsFetched) < 600 { return }
+        conditionsFetched = Date()
+        if let latest = try? await weather.current(at: point) { conditions = latest }
+    }
+
+    /// Marks a shot played from `point` on the current hole.
+    func trackShot(at point: Coordinate) {
+        shots[currentHole, default: []].append(point)
+    }
+
+    func undoShot() {
+        _ = shots[currentHole]?.popLast()
+    }
+
+    func startRound(on course: Course, with group: [Player], tee: String? = nil) async {
         guard let me else { return }
         do {
             let started = try await backend.startRound(Round(course: course, players: [me] + group), course: course)
             self.course = course
             round = started
             currentHole = course.holes.map(\.number).min() ?? 1
+            selectedTee = tee ?? course.teeNames.first
+            shots = [:]
+            conditions = nil
+            conditionsFetched = nil
+            Task { await refreshConditions(force: true) }
             pendingChallenges = []
             triedDrops = []
             chat = []
@@ -173,6 +222,7 @@ final class AppState {
     func goToHole(_ number: Int) {
         guard let course, course.hole(number) != nil else { return }
         currentHole = number
+        Task { await refreshConditions() }
     }
 
     func finishRound() async {

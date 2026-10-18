@@ -79,6 +79,11 @@ enum Geo {
         return (dx * dx + dy * dy).squareRoot()
     }
 
+    /// Halfway between two points, for distance labels on a line.
+    static func midpoint(_ a: Coordinate, _ b: Coordinate) -> Coordinate {
+        Coordinate((a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2)
+    }
+
     static func centroid(_ points: [Coordinate]) -> Coordinate? {
         guard !points.isEmpty else { return nil }
         let lat = points.map(\.latitude).reduce(0, +) / Double(points.count)

@@ -33,6 +33,10 @@ targets:
         # Leave blank to run on demo data. Fill in from Supabase › Project Settings › API.
         SupabaseURL: ""
         SupabaseAnonKey: ""
+        # Satellite photos: apple (no key), mapbox (needs MapboxAccessToken) or esri (testing only
+        # until you add an ArcGIS key). See README › Satellite imagery.
+        SatelliteProvider: apple
+        MapboxAccessToken: ""
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gimmegolf.app
