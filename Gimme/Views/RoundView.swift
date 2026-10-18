@@ -1,56 +1,71 @@
 import SwiftUI
 
+/// The round, full screen: the hole map with distances and scoring, plus the scorecard
+/// and group chat one tap away.
 struct RoundView: View {
     @Environment(AppState.self) private var app
     @Environment(LocationService.self) private var location
-    @State private var pane = Pane.hole
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingScorecard = false
+    @State private var showingChat = false
     @State private var confirmFinish = false
 
-    enum Pane: String, CaseIterable { case hole = "Hole", scorecard = "Scorecard", chat = "Chat" }
-
     var body: some View {
-        NavigationStack {
-            Group {
-                if let round = app.round, let hole = app.hole {
-                    VStack(spacing: 0) {
-                        Picker("View", selection: $pane) {
-                            ForEach(Pane.allCases, id: \.self) { Text($0.rawValue) }
+        Group {
+            if let round = app.round, let hole = app.hole {
+                HoleView(hole: hole,
+                         onClose: { dismiss() },
+                         onScorecard: { showingScorecard = true },
+                         onChat: { showingChat = true },
+                         onFinish: { confirmFinish = true })
+                    .sheet(isPresented: $showingScorecard) {
+                        NavigationStack {
+                            ScorecardView(round: round)
+                                .navigationTitle(round.courseName)
+                                .navigationBarTitleDisplayMode(.inline)
+                                .toolbar {
+                                    ToolbarItem(placement: .topBarLeading) {
+                                        ShareLink(item: round.shareText) { Image(systemName: "square.and.arrow.up") }
+                                    }
+                                    ToolbarItem(placement: .confirmationAction) {
+                                        Button("Done") { showingScorecard = false }
+                                    }
+                                }
+                                .background(Color.gimmeBackground)
                         }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
-
-                        switch pane {
-                        case .hole: HoleView(hole: hole)
-                        case .scorecard: ScorecardView(round: round)
-                        case .chat: RoundChatView()
-                        }
+                        .presentationDetents([.medium, .large])
                     }
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            ShareLink(item: round.shareText) { Image(systemName: "square.and.arrow.up") }
+                    .sheet(isPresented: $showingChat) {
+                        NavigationStack {
+                            RoundChatView()
+                                .navigationTitle("Group chat")
+                                .navigationBarTitleDisplayMode(.inline)
+                                .toolbar {
+                                    ToolbarItem(placement: .confirmationAction) {
+                                        Button("Done") { showingChat = false }
+                                    }
+                                }
                         }
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Finish") { confirmFinish = true }
-                        }
+                        .presentationDetents([.medium, .large])
                     }
-                    .navigationTitle(round.courseName)
-                    .navigationBarTitleDisplayMode(.inline)
                     .confirmationDialog("Finish this round?", isPresented: $confirmFinish, titleVisibility: .visible) {
                         Button("Finish and post to feed") {
                             Task {
                                 await app.finishRound()
                                 location.simulate(nil)
+                                dismiss()
                             }
                         }
                     }
-                } else {
-                    ContentUnavailableView("No round in progress",
-                                           systemImage: "flag",
-                                           description: Text("Start a round from Home to get GPS distances, a live scorecard and prize drops."))
-                }
+            } else {
+                ContentUnavailableView("No round in progress",
+                                       systemImage: "flag",
+                                       description: Text("Tap Play to start a round."))
+                    .onTapGesture { dismiss() }
             }
         }
+        .background(Color.gimmeBackground)
+        .appMessages(active: true)
     }
 }
 
@@ -69,7 +84,7 @@ struct ScorecardView: View {
                     ForEach(1...round.pars.count, id: \.self) { n in
                         Button { app.goToHole(n) } label: { cell("\(n)", bold: true) }
                             .buttonStyle(.plain)
-                            .background(n == app.currentHole ? Color.gimmeGreen.opacity(0.2) : .clear)
+                            .background(n == app.currentHole ? Color.gimmeLime.opacity(0.25) : .clear)
                     }
                     cell("Tot", bold: true)
                     cell("+/-", bold: true)
@@ -117,7 +132,7 @@ struct ScorecardView: View {
                 .font(.subheadline.bold())
                 .frame(width: 26, height: 26)
                 .overlay {
-                    if strokes < par { Circle().stroke(Color.gimmeBirdie, lineWidth: 1.5) }
+                    if strokes < par { Circle().stroke(Color.gimmeGold, lineWidth: 1.5) }
                     else if strokes > par { Rectangle().stroke(Color.gimmeBogey, lineWidth: 1.5) }
                 }
                 .frame(width: 36, height: 36)
@@ -144,8 +159,8 @@ struct RoundChatView: View {
                             if !mine { Text(message.author.name).font(.caption.bold()).foregroundStyle(.secondary) }
                             Text(message.text)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .foregroundStyle(mine ? Color.white : Color.primary)
-                                .background(mine ? Color.gimmeGreen : Color(.secondarySystemBackground),
+                                .foregroundStyle(mine ? Color.black : Color.white)
+                                .background(mine ? Color.gimmeLime : Color.gimmeSurfaceRaised,
                                             in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             Text(message.sentAt, style: .time).font(.caption2).foregroundStyle(.secondary)
                         }

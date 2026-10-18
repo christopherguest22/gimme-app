@@ -12,15 +12,22 @@ Gimme puts three things in one app: GPS distances on every hole, a live scorecar
 
 ## What's in the app
 
+The look and navigation follow 18Birdies (dark, map-first, a raised Play button in the middle of the tab bar) with Gimme's own colors, icons and names. No 18Birdies code or artwork is used.
+
+Tabs along the bottom: **Home, Community, Play, Prizes, Me.**
+
 - **Welcome and sign-in:** three intro slides, then sign-in with a 6-digit email code. In demo mode you only pick a name and avatar.
-- **Home:** start or resume a round, friends playing now, and prize drops on your course.
-- **Hole GPS:** a satellite hole map turned so the hole plays up the screen. It shows front, middle and back yardages, hazard and carry distances, and tap-to-measure. Holes with a prize drop show a gold zone around the green.
-- **Live scorecard:** scores for everyone in the group, updated live from their phones. Birdies are circled and bogeys boxed. Skins (with carryovers) and Nassau standings are shown below the card.
-- **Round chat:** message bubbles for your group during the round.
+- **Home:** a big Play or Resume card, your handicap, rounds and prizes, friends on the course now, and prize drops near you.
+- **Play (center button):** pick a course, then the hole fills the screen. Front, middle and back yardages sit on the right, hazard distances sit on the map, and tap-to-measure shows distance to a target and to the pin. The bottom panel switches holes and keeps score for everyone with plus and minus buttons. Holes with a prize drop show a gold zone around the green. While a round is running the Play button turns gold and says Resume.
+- **Live scorecard and chat:** buttons at the top of the hole screen. Scores update live from everyone's phones, birdies circled in gold and bogeys boxed, with skins and Nassau below. Chat is for your group during the round.
 - **Prize drops:** reach the gold zone during a round and the prize unlocks. Some drops need par or birdie first. GPS keeps running with the phone in your pocket, and you get a notification when you win.
-- **Prize wallet:** won prizes with copyable codes, expiry dates and redeemed status.
-- **Friends:** add friends by their handle, see a feed of rounds and prizes, and post updates.
-- **Profile:** handicap estimate, best score, round history (tap a round for its scorecard), edit name and avatar, sign out.
+- **Prizes:** won prizes with copyable codes, expiry dates and redeemed status.
+- **Community:** Feed (rounds, prizes and posts), Leaderboard (friends by handicap) and Friends (add by handle).
+- **Me:** profile header with handicap, rounds, friends and prizes, your stats, and round history (tap a round for its scorecard). Edit profile and sign out are in the menu.
+
+## Website
+
+`website/index.html` is the Gimme marketing site, laid out like 18birdies.com: top menu, a hero with the App Store button, a section each for GPS, scoring, community and prizes, a "For brands" section that links to the brand dashboard, and a footer. Reviews and the App Store link are placeholders until launch. Open the file in a browser, or host the `website` folder on any static host.
 
 ## Open it in Xcode
 

@@ -1,72 +1,48 @@
 import SwiftUI
 import UIKit
 
-struct FeedView: View {
+/// Community: the feed, a leaderboard of your friends, and your friends list, on one tab.
+struct CommunityView: View {
     @Environment(AppState.self) private var app
+    @State private var pane = Pane.feed
     @State private var draft = ""
     @State private var addingFriend = false
     @State private var handle = ""
 
+    enum Pane: String, CaseIterable { case feed = "Feed", leaderboard = "Leaderboard", friends = "Friends" }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            Button { addingFriend = true } label: {
-                                VStack {
-                                    Image(systemName: "plus")
-                                        .font(.title2.bold())
-                                        .frame(width: 52, height: 52)
-                                        .background(Color.gimmeGreen.opacity(0.15), in: Circle())
-                                    Text("Add").font(.caption.bold())
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            ForEach(app.friends) { friend in
-                                VStack {
-                                    AvatarView(player: friend, size: 52)
-                                        .overlay(alignment: .bottomTrailing) {
-                                            if friend.playingNow != nil {
-                                                Circle().fill(.green).frame(width: 12, height: 12)
-                                                    .overlay(Circle().stroke(.white, lineWidth: 2))
-                                            }
-                                        }
-                                    Text(friend.name).font(.caption.bold())
-                                    Text(friend.handicap.map { String(format: "%.1f", $0) } ?? "–")
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                } header: {
-                    Text("Friends")
+            VStack(spacing: 0) {
+                Picker("Section", selection: $pane) {
+                    ForEach(Pane.allCases, id: \.self) { Text($0.rawValue) }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
 
-                Section {
-                    HStack {
-                        TextField("Post to your friends", text: $draft)
-                        Button("Post") {
-                            let text = draft
-                            draft = ""
-                            Task { await app.post(text) }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        switch pane {
+                        case .feed: feed
+                        case .leaderboard: leaderboard
+                        case .friends: friendsList
                         }
-                        .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
                 }
-
-                Section("Feed") {
-                    if app.feed.isEmpty {
-                        Text("Rounds and prizes from you and your friends show up here.").foregroundStyle(.secondary)
-                    }
-                    ForEach(app.feed) { post in
-                        FeedRow(post: post)
-                    }
+                .refreshable { await app.load() }
+            }
+            .background(Color.gimmeBackground)
+            .navigationTitle("Community")
+            .toolbarBackground(Color.gimmeBackground, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { addingFriend = true } label: { Image(systemName: "person.badge.plus") }
+                        .accessibilityLabel("Add a friend")
                 }
             }
-            .navigationTitle("Friends")
-            .refreshable { await app.load() }
             .alert("Add a friend", isPresented: $addingFriend) {
                 TextField("Their Gimme handle", text: $handle)
                     .textInputAutocapitalization(.never)
@@ -77,8 +53,89 @@ struct FeedView: View {
                 }
                 Button("Cancel", role: .cancel) { handle = "" }
             } message: {
-                Text("Your friend's handle is on their Profile tab.")
+                Text("Your friend's handle is on their Me tab.")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var feed: some View {
+        HStack(spacing: 10) {
+            if let me = app.me { AvatarView(player: me, size: 36) }
+            TextField("Share something with your crew", text: $draft)
+                .font(.gimme(15))
+            Button("Post") {
+                let text = draft
+                draft = ""
+                Task { await app.post(text) }
+            }
+            .font(.gimme(15, .bold))
+            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .gimmeCard()
+
+        if app.feed.isEmpty {
+            Text("Rounds and prizes from you and your friends show up here.")
+                .foregroundStyle(.secondary).padding(.top, 20)
+        }
+        ForEach(app.feed) { post in
+            FeedRow(post: post).gimmeCard(highlight: post.kind == .drop ? Color.gimmeGold : nil)
+        }
+    }
+
+    /// Friends ranked by handicap, lowest first.
+    @ViewBuilder
+    private var leaderboard: some View {
+        let everyone = rankedPlayers
+        SectionHeader(title: "Handicap leaderboard")
+        VStack(spacing: 0) {
+            ForEach(Array(everyone.enumerated()), id: \.element.id) { index, player in
+                HStack(spacing: 12) {
+                    Text("\(index + 1)")
+                        .font(.gimme(16, .heavy))
+                        .foregroundStyle(index == 0 ? Color.gimmeGold : .secondary)
+                        .frame(width: 26)
+                    AvatarView(player: player, size: 36)
+                    Text(player.id == app.myId ? "\(player.name) (you)" : player.name).font(.gimme(15, .bold))
+                    Spacer()
+                    Text(player.handicap.map { String(format: "%.1f", $0) } ?? "–").font(.gimme(18, .heavy))
+                }
+                .padding(.vertical, 10)
+                if index < everyone.count - 1 { Divider() }
+            }
+        }
+        .gimmeCard()
+    }
+
+    private var rankedPlayers: [Player] {
+        var players = app.friends
+        if var you = app.me {
+            you.handicap = app.handicapEstimate ?? you.handicap
+            players.append(you)
+        }
+        return players.sorted { ($0.handicap ?? 99) < ($1.handicap ?? 99) }
+    }
+
+    @ViewBuilder
+    private var friendsList: some View {
+        Button { addingFriend = true } label: {
+            Label("Add a friend by handle", systemImage: "person.badge.plus")
+                .font(.gimme(15, .bold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .gimmeCard()
+        ForEach(app.friends) { friend in
+            HStack(spacing: 12) {
+                AvatarView(player: friend, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(friend.name).font(.gimme(16, .bold))
+                    Text(friend.playingNow ?? "Handicap \(friend.handicap.map { String(format: "%.1f", $0) } ?? "–")")
+                        .font(.gimme(13))
+                        .foregroundStyle(friend.playingNow == nil ? Color.secondary : Color.gimmeLime)
+                }
+                Spacer()
+            }
+            .gimmeCard()
         }
     }
 }
@@ -128,7 +185,7 @@ struct WalletView: View {
                         }
                         .padding()
                     }
-                    .background(Color(.systemGroupedBackground))
+                    .background(Color.gimmeBackground)
                 }
             }
             .navigationTitle("Prize wallet")
@@ -252,63 +309,130 @@ struct Confetti: View {
     }
 }
 
+/// Me: profile header with counts and handicap, your stats, and round history.
 struct ProfileView: View {
     @Environment(AppState.self) private var app
     @State private var editing = false
 
+    private var fullRounds: [Round] { app.pastRounds.filter { $0.holesPlayed(app.myId) == $0.pars.count && $0.pars.count == 18 } }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    HStack(spacing: 16) {
-                        if let me = app.me { AvatarView(player: me, size: 72) }
-                        VStack(alignment: .leading) {
-                            Text(app.me?.name ?? "").font(.gimme(24, .bold))
-                            Text("\(app.friends.count) friends · \(app.pastRounds.count) rounds")
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Edit") { editing = true }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    header
+                    SectionHeader(title: "Stats")
+                    HStack(spacing: 10) {
+                        statTile(averageScore, "Avg 18")
+                        statTile(fullRounds.map { $0.total(app.myId) }.min().map { "\($0)" } ?? "–", "Best 18")
+                        statTile("\(birdies)", "Birdies")
                     }
-                }
-                Section {
-                    LabeledContent("Handicap estimate",
-                                   value: app.handicapEstimate.map { String(format: "%.1f", $0) } ?? "Play 3 full rounds")
-                    LabeledContent("Prizes won", value: "\(app.wallet.count)")
-                    if let best = app.pastRounds.filter({ $0.holesPlayed(app.myId) == 18 }).map({ $0.total(app.myId) }).min() {
-                        LabeledContent("Best 18", value: "\(best)")
-                    }
-                } footer: {
-                    Text("An estimate using the World Handicap System method, not an official handicap index.")
-                }
-                Section("Round history") {
+                    SectionHeader(title: "Round history")
                     if app.pastRounds.isEmpty {
                         Text("Finished rounds show up here.").foregroundStyle(.secondary)
                     }
                     ForEach(app.pastRounds) { round in
                         NavigationLink {
-                            ScorecardView(round: round).navigationTitle(round.courseName)
+                            ScorecardView(round: round)
+                                .navigationTitle(round.courseName)
+                                .background(Color.gimmeBackground)
                         } label: {
                             HStack {
-                                VStack(alignment: .leading) {
-                                    Text(round.courseName)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(round.courseName).font(.gimme(15, .bold))
                                     Text(round.date.formatted(date: .abbreviated, time: .omitted))
-                                        .font(.caption).foregroundStyle(.secondary)
+                                        .font(.gimme(12)).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Text("\(round.total(app.myId))").bold()
-                                Text(Scoring.formatToPar(round.toPar(app.myId))).foregroundStyle(.secondary)
+                                Text("\(round.total(app.myId))").font(.gimme(22, .heavy))
+                                Image(systemName: "chevron.right").foregroundStyle(.secondary)
                             }
+                            .foregroundStyle(.white)
+                            .gimmeCard()
                         }
                     }
+                    Text("Handicap is an estimate using the World Handicap System method, not an official handicap index.")
+                        .font(.gimme(12)).foregroundStyle(.secondary)
                 }
-                Section {
-                    Button("Sign out", role: .destructive) { Task { await app.signOut() } }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+            .background(Color.gimmeBackground)
+            .navigationTitle("Me")
+            .toolbarBackground(Color.gimmeBackground, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Edit profile", systemImage: "pencil") { editing = true }
+                        Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                            Task { await app.signOut() }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Profile options")
                 }
             }
-            .navigationTitle("Profile")
             .sheet(isPresented: $editing) { EditProfileView() }
         }
+    }
+
+    private var averageScore: String {
+        guard !fullRounds.isEmpty else { return "–" }
+        let total = fullRounds.map { $0.total(app.myId) }.reduce(0, +)
+        return String(format: "%.1f", Double(total) / Double(fullRounds.count))
+    }
+
+    private var birdies: Int {
+        app.pastRounds.reduce(0) { sum, round in
+            sum + round.pars.indices.filter { i in (round.strokes(app.myId, hole: i + 1) ?? 99) < round.pars[i] }.count
+        }
+    }
+
+    private var header: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 14) {
+                if let me = app.me { AvatarView(player: me, size: 76) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(app.me?.name ?? "").font(.gimme(26, .heavy))
+                    Text("Gimme golfer").font(.gimme(13, .bold)).opacity(0.75)
+                }
+                Spacer()
+                VStack(spacing: 0) {
+                    Text(app.handicapEstimate.map { String(format: "%.1f", $0) } ?? "–").font(.gimme(22, .heavy))
+                    Text("HCP").font(.gimme(10, .heavy)).opacity(0.8)
+                }
+                .frame(width: 64, height: 64)
+                .background(.white.opacity(0.15), in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.6), lineWidth: 2))
+            }
+            HStack(spacing: 0) {
+                count("\(app.pastRounds.count)", "Rounds")
+                count("\(app.friends.count)", "Friends")
+                count("\(app.wallet.count)", "Prizes")
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(18)
+        .background(LinearGradient.gimmeFairway, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func count(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 0) {
+            Text(value).font(.gimme(20, .heavy))
+            Text(label).font(.gimme(12, .bold)).opacity(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func statTile(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.gimme(24, .heavy))
+            Text(label).font(.gimme(12, .bold)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color.gimmeSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

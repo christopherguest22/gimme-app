@@ -8,6 +8,13 @@ extension Color {
     static let gimmeSand = Color(red: 0.93, green: 0.85, blue: 0.62)
     static let gimmeBirdie = Color(red: 0.86, green: 0.20, blue: 0.20)
     static let gimmeBogey = Color(red: 0.20, green: 0.42, blue: 0.85)
+
+    // Dark, map-first surfaces (the app runs in dark mode like most golf GPS apps).
+    static let gimmeBackground = Color(red: 0.04, green: 0.08, blue: 0.06)
+    static let gimmeSurface = Color(red: 0.08, green: 0.13, blue: 0.10)
+    static let gimmeSurfaceRaised = Color(red: 0.12, green: 0.18, blue: 0.14)
+    /// Brighter green that reads well on the dark surfaces.
+    static let gimmeLime = Color(red: 0.18, green: 0.75, blue: 0.42)
 }
 
 extension LinearGradient {
@@ -29,7 +36,7 @@ struct GimmeCard: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(14)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Color.gimmeSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 if let highlight {
                     RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(highlight, lineWidth: 2)
@@ -53,8 +60,8 @@ struct GimmeButtonStyle: ButtonStyle {
             .font(.gimme(17, .bold))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 15)
-            .foregroundStyle(prize ? Color.black : Color.white)
-            .background(prize ? AnyShapeStyle(LinearGradient.gimmePrize) : AnyShapeStyle(Color.gimmeGreen),
+            .foregroundStyle(Color.black)
+            .background(prize ? AnyShapeStyle(LinearGradient.gimmePrize) : AnyShapeStyle(Color.gimmeLime),
                         in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
@@ -75,6 +82,28 @@ struct AvatarView: View {
         Text(player.avatar)
             .font(.system(size: size * 0.55))
             .frame(width: size, height: size)
-            .background(Color.gimmeGreen.opacity(0.15), in: Circle())
+            .background(Color.gimmeSurfaceRaised, in: Circle())
+    }
+}
+
+/// Section header in the dark style: small caps label with an optional action.
+struct SectionHeader: View {
+    let title: String
+    var action: (label: String, run: () -> Void)?
+
+    var body: some View {
+        HStack {
+            Text(title.uppercased())
+                .font(.gimme(13, .heavy))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if let action {
+                Button(action.label, action: action.run)
+                    .font(.gimme(14, .bold))
+                    .foregroundStyle(Color.gimmeLime)
+            }
+        }
+        .padding(.top, 6)
     }
 }
