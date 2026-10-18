@@ -1,0 +1,45 @@
+# XcodeGen spec: run `xcodegen` in this folder to create Gimme.xcodeproj.
+name: Gimme
+options:
+  bundleIdPrefix: com.gimmegolf
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: ""
+targets:
+  Gimme:
+    type: application
+    platform: iOS
+    sources: [Gimme]
+    info:
+      path: Gimme/Info.plist
+      properties:
+        CFBundleDisplayName: Gimme
+        CFBundleShortVersionString: "0.1.0"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocationWhenInUseUsageDescription: "Gimme uses your location for distances to the green and to unlock prize drops on the hole you're playing."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gimmegolf.app
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+  GimmeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [GimmeTests]
+    dependencies:
+      - target: Gimme
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Gimme:
+    build:
+      targets:
+        Gimme: all
+        GimmeTests: [test]
+    test:
+      targets: [GimmeTests]
