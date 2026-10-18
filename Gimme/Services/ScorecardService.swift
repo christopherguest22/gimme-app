@@ -22,6 +22,13 @@ struct ScorecardService {
         var name: String
         var tees: [TeeSet]
         var holes: [HoleCard]
+
+        var isConsistent: Bool {
+            guard !holes.isEmpty, holes.allSatisfy({ (3...6).contains($0.par ?? 0) }) else { return false }
+            let total = holes.compactMap(\.par).reduce(0, +)
+            guard holes.count == 18 || holes.count == 9, let printed = tees.compactMap(\.par).first else { return true }
+            return total == printed || total * 2 == printed
+        }
     }
 
     /// Finds the course on OpenGolfAPI by name and location, then loads its scorecard.
@@ -81,6 +88,9 @@ struct ScorecardService {
     /// has tee and green positions, the holes are built from the scorecard instead.
     static func merge(_ card: Scorecard, into course: Course) -> Course {
         var course = course
+        // Some listings are half filled in (every hole par 5, say). Only trust a card whose
+        // hole pars add up to the par printed for its tees.
+        guard card.isConsistent else { return course }
         course.tees = card.tees
         if course.holes.isEmpty {
             course.holes = card.holes.compactMap { h in

@@ -10,6 +10,9 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     playCard
+                    if app.round == nil, let pack = CoursePack.featured {
+                        FeaturedCourseCard(pack: pack, onPlay: startRound)
+                    }
                     statsStrip
 
                     let playing = app.friends.filter { $0.playingNow != nil }
@@ -219,6 +222,32 @@ struct StartRoundView: View {
                 }
 
                 Section {
+                    ForEach(CoursePack.courses) { pack in
+                        Button { load(pack.summary) } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(pack.name).font(.headline)
+                                        if pack.featured {
+                                            Text("FEATURED").font(.gimme(10, .heavy))
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(Color.gimmeGold, in: Capsule())
+                                                .foregroundStyle(.black)
+                                        }
+                                    }
+                                    Text(packDetail(pack)).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                } header: {
+                    Text(CoursePack.area)
+                }
+
+                Section {
                     Button {
                         let tee = location.coordinate ?? Coordinate(37.3349, -122.0090)
                         Task { offerTees(await app.weather.addElevation(to: DemoCourse.make(firstTee: tee))) }
@@ -273,6 +302,13 @@ struct StartRoundView: View {
         }
     }
 
+    private func packDetail(_ pack: PackCourse) -> String {
+        var parts = ["Par 72"]
+        if let tee = pack.longestTee { parts.append("\(tee.yardage.formatted()) yds · \(String(format: "%.1f", tee.rating))/\(tee.slope)") }
+        if pack.membersOnly { parts.append("Members") }
+        return parts.joined(separator: " · ")
+    }
+
     private var players: [Player] { app.friends.filter { group.contains($0.id) } }
 
     /// Asks for tees when the scorecard has more than one set, otherwise starts right away.
@@ -307,5 +343,68 @@ struct StartRoundView: View {
         searching = true
         defer { searching = false }
         nearby = (try? await app.courses.nearbyCourses(around: point)) ?? []
+    }
+}
+
+/// Home showcase for the launch course: hole 18 of the Ocean Course on satellite, with its numbers.
+struct FeaturedCourseCard: View {
+    @Environment(AppState.self) private var app
+    let pack: PackCourse
+    var onPlay: () -> Void
+    var holeNumber = 18
+
+    @State private var projector = MapProjector()
+
+    private var packHole: PackCourse.PackHole? { pack.holes.first { $0.number == holeNumber } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                if let hole = app.featuredCourse?.hole(holeNumber) {
+                    let length = Geo.meters(hole.tee, hole.greenCenter)
+                    SatelliteMapView(frame: .init(center: Geo.offset(hole.tee, meters: length * 0.5, bearing: hole.bearing),
+                                                  distance: max(length * 2.2, 420),
+                                                  heading: hole.bearing),
+                                     lines: [MapLine(points: [hole.tee, hole.greenCenter], color: UIColor(Color.gimmeGold), width: 3)],
+                                     projector: projector)
+                        .allowsHitTesting(false)
+                } else {
+                    Color.gimmeSurfaceRaised
+                        .overlay { ProgressView().tint(.white) }
+                }
+                HStack(spacing: 6) {
+                    Text("#\(holeNumber)").font(.gimme(22, .heavy))
+                    if let packHole {
+                        Text("Par \(packHole.par)").font(.gimme(13, .bold))
+                        if let tee = pack.longestTee, let yards = packHole.yardages[tee.name] {
+                            Text("\(yards) yds").font(.gimme(13, .bold))
+                        }
+                        Text("HCP \(packHole.handicap)").font(.gimme(13, .bold))
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(10)
+            }
+            .frame(height: 210)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("FEATURED COURSE").font(.gimme(11, .heavy)).tracking(0.8).foregroundStyle(Color.gimmeGold)
+                Text(pack.name).font(.gimme(22, .heavy))
+                if let tee = pack.longestTee {
+                    Text("Kiawah Island · Par \(tee.par) · \(tee.yardage.formatted()) yds · \(String(format: "%.1f", tee.rating))/\(tee.slope)")
+                        .font(.gimme(13, .bold)).foregroundStyle(.secondary)
+                }
+                Button(action: onPlay) { Label("Play a round", systemImage: "flag.fill") }
+                    .buttonStyle(.gimme)
+            }
+            .padding(16)
+        }
+        .foregroundStyle(.white)
+        .background(Color.gimmeSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .task { await app.loadFeatured() }
     }
 }

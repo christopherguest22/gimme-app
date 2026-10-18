@@ -8,6 +8,9 @@ struct Course: Identifiable, Codable, Hashable {
     var source: String
     /// Tee boxes from the course scorecard (OpenGolfAPI). nil until the scorecard is loaded.
     var tees: [TeeSet]? = nil
+    /// True when the hole positions are a stand-in layout because no map exists yet.
+    /// The golfer fixes them with Tools › "Set tee here" / "Set green here".
+    var needsMapping: Bool? = nil
 
     var par: Int { holes.map(\.par).reduce(0, +) }
 

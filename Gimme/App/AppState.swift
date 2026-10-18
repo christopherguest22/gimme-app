@@ -128,21 +128,59 @@ final class AppState {
     var hole: Hole? { course?.hole(currentHole) }
 
     /// Builds a playable course: the hole shapes from OpenStreetMap, the scorecard (par, stroke
-    /// index, yardage per tee) from OpenGolfAPI, and tee and green heights for plays-like distances.
+    /// index, yardage per tee) from the built-in course pack or OpenGolfAPI, any tee and green spots
+    /// the golfer has set, and tee and green heights for plays-like distances.
     func prepareCourse(_ summary: CourseSummary) async throws -> Course {
+        let pack = CoursePack.course(id: summary.id)
         var course: Course
         var mapError: Error?
         do {
-            course = try await courses.loadCourse(summary)
+            if let pack {
+                course = try await courses.loadCourse(named: pack.osmName, near: pack.center)
+                course.id = pack.id
+                course.name = pack.name
+            } else {
+                course = try await courses.loadCourse(summary)
+            }
         } catch {
             mapError = error
             course = Course(id: summary.id, name: summary.name, holes: [], source: "© OpenStreetMap contributors")
         }
-        if let card = try? await scorecards.scorecard(named: summary.name, near: summary.center) {
+
+        var card = pack?.scorecard
+        if card == nil { card = try? await scorecards.scorecard(named: summary.name, near: summary.center) }
+        if let card {
             course = ScorecardService.merge(card, into: course)
+            // No map yet: lay the holes out from the scorecard so the course is playable, and let
+            // the golfer pin the real tees and greens as they play.
+            if course.holes.isEmpty, card.isConsistent {
+                var standIn = DemoCourse.provisional(id: course.id, name: course.name, around: summary.center, card: card)
+                standIn.tees = course.tees
+                standIn = ScorecardService.merge(card, into: standIn)
+                course = standIn
+            }
         }
+        course = HoleOverrides.apply(to: course)
         guard !course.holes.isEmpty else { throw mapError ?? CourseService.CourseError.noHoles }
         return await weather.addElevation(to: course)
+    }
+
+    /// The launch-area showcase course (the Ocean Course), loaded for the Home screen preview.
+    var featuredCourse: Course?
+
+    func loadFeatured() async {
+        guard featuredCourse == nil, let pack = CoursePack.featured else { return }
+        featuredCourse = try? await prepareCourse(pack.summary)
+    }
+
+    /// Saves where this hole's tee or green really is (from the golfer's GPS) and moves it on the map.
+    func setSpot(tee: Coordinate? = nil, green: Coordinate? = nil) {
+        guard let course, let hole = course.hole(currentHole) else { return }
+        var spot = HoleOverrides.load(course.id)[hole.number] ?? .init()
+        if let tee { spot.tee = tee }
+        if let green { spot.green = green }
+        HoleOverrides.save(spot, hole: hole.number, courseId: course.id)
+        self.course = HoleOverrides.apply(to: course)
     }
 
     func refreshConditions(force: Bool = false) async {

@@ -204,3 +204,50 @@ final class ScorecardTests: XCTestCase {
         XCTAssertEqual(Set(course.holes.compactMap(\.handicap)).count, 18)
     }
 }
+
+final class KiawahPackTests: XCTestCase {
+    func testAllSevenCoursesWithOceanFirst() {
+        let names = CoursePack.courses.map(\.name)
+        XCTAssertEqual(names.count, 7)
+        XCTAssertEqual(names.first, "The Ocean Course")
+        XCTAssertEqual(Set(names), ["The Ocean Course", "Turtle Point", "Cougar Point", "Osprey Point",
+                                    "Oak Point", "Cassique", "The River Course"])
+    }
+
+    func testOceanCourseHole18() throws {
+        let ocean = try XCTUnwrap(CoursePack.featured)
+        let eighteen = try XCTUnwrap(ocean.holes.first { $0.number == 18 })
+        XCTAssertEqual(eighteen.par, 4)
+        XCTAssertEqual(eighteen.handicap, 6)
+        XCTAssertEqual(eighteen.yardages["Tournament"], 439)
+    }
+
+    func testTeeTotalsMatchHoleYardages() {
+        for course in CoursePack.courses where !course.holes.isEmpty {
+            XCTAssertTrue(course.scorecard.isConsistent, course.name)
+            for tee in course.tees {
+                let total = course.holes.compactMap { $0.yardages[tee.name] }.reduce(0, +)
+                XCTAssertEqual(Double(total), Double(tee.yardage), accuracy: Double(tee.yardage) * 0.01, "\(course.name) \(tee.name)")
+            }
+        }
+    }
+
+    func testHalfFilledScorecardIsIgnored() {
+        // Every hole listed as par 5 (as one public listing has for Oak Point) must not overwrite the map.
+        let card = ScorecardService.Scorecard(
+            name: "Oak Point",
+            tees: [TeeSet(name: "Oak", par: 72, yardage: 6450)],
+            holes: (1...18).map { .init(number: $0, par: 5, handicap: $0, yardages: [:]) })
+        XCTAssertFalse(card.isConsistent)
+        let demo = DemoCourse.make(firstTee: Coordinate(32.6, -80.1))
+        XCTAssertEqual(ScorecardService.merge(card, into: demo).par, demo.par)
+    }
+
+    func testStandInLayoutUsesScorecard() throws {
+        let ocean = try XCTUnwrap(CoursePack.featured)
+        let course = DemoCourse.provisional(id: ocean.id, name: ocean.name, around: ocean.center, card: ocean.scorecard)
+        XCTAssertEqual(course.holes.count, 18)
+        XCTAssertEqual(course.needsMapping, true)
+        XCTAssertEqual(course.hole(18)?.lengthYards ?? 0, 439, accuracy: 2)
+    }
+}

@@ -43,6 +43,14 @@ No provider shows live photos: all of them are months to a few years old, and th
 
 **Plays-like distance** uses the rules of thumb 18Birdies describes: a yard longer for each yard uphill, 1% longer per mph of headwind and 0.5% shorter per mph of tailwind, and 2 yards for every 10°F away from 75°F on a 150-yard shot. The suggested club uses typical amateur distances in `Bag.standard` for now.
 
+## Kiawah Island launch courses
+
+For testing and launch, seven Kiawah Island courses ship inside the app (`Gimme/Resources/kiawah-courses.json`) and sit at the top of the course list: **The Ocean Course** (featured), Turtle Point, Cougar Point, Osprey Point, Oak Point, Cassique and The River Course (Cassique and River are marked members only).
+
+- **Home** shows a featured card with hole 18 of the Ocean Course on satellite, with par, yardage and handicap.
+- **Scorecards** (par, handicap, yardage for every tee, rating and slope) come from OpenGolfAPI and were checked so each tee's hole yardages add up to its total. Tees that didn't add up were left out: Red at Cassique, and White and Green at the River Course. Oak Point's public listing has every hole as par 5, so its holes come from the map only until a real card is added.
+- **Hole positions** load from OpenStreetMap on the phone. If a course isn't mapped there, Gimme lays the holes out from the scorecard as a stand-in and shows a banner. Walking the course, use Tools › **Set tee here** and **Set green here** on each hole to pin the real spots. They're saved on the phone and used from then on.
+
 ## Website
 
 `website/index.html` is the Gimme marketing site, laid out like 18birdies.com: top menu, a hero with the App Store button, a section each for GPS, scoring, community and prizes, a "For brands" section that links to the brand dashboard, and a footer. Reviews and the App Store link are placeholders until launch. Open the file in a browser, or host the `website` folder on any static host.

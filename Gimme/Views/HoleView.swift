@@ -41,7 +41,10 @@ struct HoleView: View {
             VStack(spacing: 8) {
                 topBar
                 HStack {
-                    if let drop = holeDrops.first { dropBanner(drop) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        if app.course?.needsMapping == true { mappingBanner }
+                        if let drop = holeDrops.first { dropBanner(drop) }
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 12)
@@ -261,6 +264,15 @@ struct HoleView: View {
         .accessibilityLabel(label)
     }
 
+    private var mappingBanner: some View {
+        Label("Holes not mapped yet. Use Tools › Set tee here and Set green here as you play.", systemImage: "map")
+            .font(.gimme(12, .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: 260, alignment: .leading)
+    }
+
     private func dropBanner(_ drop: Drop) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "gift.fill")
@@ -352,6 +364,12 @@ struct HoleView: View {
             if let tees = app.course?.teeNames, tees.count > 1 {
                 Picker("Tees", selection: Binding(get: { app.selectedTee ?? "" }, set: { app.selectedTee = $0 })) {
                     ForEach(tees, id: \.self) { Text($0).tag($0) }
+                }
+            }
+            if let me = location.coordinate {
+                Section("Fix this hole's map") {
+                    Button("Set tee here", systemImage: "mappin") { app.setSpot(tee: me) }
+                    Button("Set green here", systemImage: "flag") { app.setSpot(green: me) }
                 }
             }
             if !holeShots.isEmpty {

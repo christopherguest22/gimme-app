@@ -28,6 +28,15 @@ struct CourseService {
         .sorted { Geo.meters($0.center, point) < Geo.meters($1.center, point) }
     }
 
+    /// Finds a course on the map by name near a known point, then loads its holes.
+    func loadCourse(named name: String, near point: Coordinate) async throws -> Course {
+        let nearby = try await nearbyCourses(around: point, radiusMeters: 3_000)
+        guard let match = nearby.first(where: { $0.name.localizedCaseInsensitiveContains(name) }) else {
+            throw CourseError.noHoles
+        }
+        return try await loadCourse(match)
+    }
+
     /// Full hole-by-hole map for one course from `nearbyCourses`.
     func loadCourse(_ summary: CourseSummary) async throws -> Course {
         // Overpass areas are numbered from the OSM id: ways + 2.4 billion, relations + 3.6 billion.

@@ -1,0 +1,1669 @@
+{
+ "area": "Kiawah Island, SC",
+ "source": "Scorecards from OpenGolfAPI (ODbL), checked against tee totals",
+ "courses": [
+  {
+   "slug": "ocean",
+   "name": "The Ocean Course",
+   "osmName": "Ocean Course",
+   "ogaId": "2f8238b3-85d2-4d54-b1af-779dec846381",
+   "lat": 32.6124839857,
+   "lng": -80.0226384401,
+   "membersOnly": false,
+   "featured": true,
+   "tees": [
+    {
+     "name": "Tournament",
+     "rating": 77.3,
+     "slope": 144,
+     "par": 72,
+     "yardage": 7356
+    },
+    {
+     "name": "Ocean",
+     "rating": 73.6,
+     "slope": 138,
+     "par": 72,
+     "yardage": 6779
+    },
+    {
+     "name": "Dye",
+     "rating": 72.0,
+     "slope": 134,
+     "par": 72,
+     "yardage": 6475
+    },
+    {
+     "name": "Kiawah",
+     "rating": 70.9,
+     "slope": 132,
+     "par": 72,
+     "yardage": 6202
+    },
+    {
+     "name": "Carolina",
+     "rating": 72.7,
+     "slope": 124,
+     "par": 72,
+     "yardage": 5327
+    }
+   ],
+   "holes": [
+    {
+     "number": 1,
+     "par": 4,
+     "handicap": 15,
+     "yardages": {
+      "Tournament": 396,
+      "Ocean": 375,
+      "Dye": 365,
+      "Kiawah": 357,
+      "Carolina": 306
+     }
+    },
+    {
+     "number": 2,
+     "par": 5,
+     "handicap": 3,
+     "yardages": {
+      "Tournament": 543,
+      "Ocean": 528,
+      "Dye": 501,
+      "Kiawah": 495,
+      "Carolina": 419
+     }
+    },
+    {
+     "number": 3,
+     "par": 4,
+     "handicap": 9,
+     "yardages": {
+      "Tournament": 384,
+      "Ocean": 367,
+      "Dye": 319,
+      "Kiawah": 310,
+      "Carolina": 268
+     }
+    },
+    {
+     "number": 4,
+     "par": 4,
+     "handicap": 1,
+     "yardages": {
+      "Tournament": 453,
+      "Ocean": 432,
+      "Dye": 401,
+      "Kiawah": 396,
+      "Carolina": 328
+     }
+    },
+    {
+     "number": 5,
+     "par": 3,
+     "handicap": 11,
+     "yardages": {
+      "Tournament": 207,
+      "Ocean": 185,
+      "Dye": 177,
+      "Kiawah": 171,
+      "Carolina": 117
+     }
+    },
+    {
+     "number": 6,
+     "par": 4,
+     "handicap": 13,
+     "yardages": {
+      "Tournament": 455,
+      "Ocean": 377,
+      "Dye": 345,
+      "Kiawah": 331,
+      "Carolina": 299
+     }
+    },
+    {
+     "number": 7,
+     "par": 5,
+     "handicap": 7,
+     "yardages": {
+      "Tournament": 527,
+      "Ocean": 505,
+      "Dye": 493,
+      "Kiawah": 484,
+      "Carolina": 432
+     }
+    },
+    {
+     "number": 8,
+     "par": 3,
+     "handicap": 17,
+     "yardages": {
+      "Tournament": 198,
+      "Ocean": 170,
+      "Dye": 166,
+      "Kiawah": 151,
+      "Carolina": 105
+     }
+    },
+    {
+     "number": 9,
+     "par": 4,
+     "handicap": 5,
+     "yardages": {
+      "Tournament": 464,
+      "Ocean": 415,
+      "Dye": 406,
+      "Kiawah": 399,
+      "Carolina": 344
+     }
+    },
+    {
+     "number": 10,
+     "par": 4,
+     "handicap": 16,
+     "yardages": {
+      "Tournament": 439,
+      "Ocean": 378,
+      "Dye": 360,
+      "Kiawah": 347,
+      "Carolina": 310
+     }
+    },
+    {
+     "number": 11,
+     "par": 5,
+     "handicap": 8,
+     "yardages": {
+      "Tournament": 562,
+      "Ocean": 521,
+      "Dye": 506,
+      "Kiawah": 476,
+      "Carolina": 440
+     }
+    },
+    {
+     "number": 12,
+     "par": 4,
+     "handicap": 10,
+     "yardages": {
+      "Tournament": 466,
+      "Ocean": 420,
+      "Dye": 412,
+      "Kiawah": 398,
+      "Carolina": 326
+     }
+    },
+    {
+     "number": 13,
+     "par": 4,
+     "handicap": 2,
+     "yardages": {
+      "Tournament": 404,
+      "Ocean": 371,
+      "Dye": 364,
+      "Kiawah": 333,
+      "Carolina": 312
+     }
+    },
+    {
+     "number": 14,
+     "par": 3,
+     "handicap": 14,
+     "yardages": {
+      "Tournament": 194,
+      "Ocean": 171,
+      "Dye": 161,
+      "Kiawah": 151,
+      "Carolina": 132
+     }
+    },
+    {
+     "number": 15,
+     "par": 4,
+     "handicap": 18,
+     "yardages": {
+      "Tournament": 421,
+      "Ocean": 391,
+      "Dye": 381,
+      "Kiawah": 358,
+      "Carolina": 306
+     }
+    },
+    {
+     "number": 16,
+     "par": 5,
+     "handicap": 4,
+     "yardages": {
+      "Tournament": 581,
+      "Ocean": 555,
+      "Dye": 540,
+      "Kiawah": 491,
+      "Carolina": 427
+     }
+    },
+    {
+     "number": 17,
+     "par": 3,
+     "handicap": 12,
+     "yardages": {
+      "Tournament": 223,
+      "Ocean": 197,
+      "Dye": 182,
+      "Kiawah": 168,
+      "Carolina": 122
+     }
+    },
+    {
+     "number": 18,
+     "par": 4,
+     "handicap": 6,
+     "yardages": {
+      "Tournament": 439,
+      "Ocean": 421,
+      "Dye": 396,
+      "Kiawah": 386,
+      "Carolina": 314
+     }
+    }
+   ]
+  },
+  {
+   "slug": "turtle",
+   "name": "Turtle Point",
+   "osmName": "Turtle Point",
+   "ogaId": "92ca4086-5c8f-4e4a-9a9f-580fc8dfb59c",
+   "lat": 32.6078025554,
+   "lng": -80.0861477852,
+   "membersOnly": false,
+   "featured": false,
+   "tees": [
+    {
+     "name": "Tournament",
+     "rating": 73.0,
+     "slope": 134,
+     "par": 72,
+     "yardage": 6911
+    },
+    {
+     "name": "Turtle",
+     "rating": 71.3,
+     "slope": 132,
+     "par": 72,
+     "yardage": 6510
+    },
+    {
+     "name": "Nicklaus",
+     "rating": 69.9,
+     "slope": 129,
+     "par": 72,
+     "yardage": 6162
+    },
+    {
+     "name": "Kiawah",
+     "rating": 68.1,
+     "slope": 125,
+     "par": 72,
+     "yardage": 5746
+    },
+    {
+     "name": "Governors",
+     "rating": 65.6,
+     "slope": 115,
+     "par": 72,
+     "yardage": 5310
+    },
+    {
+     "name": "Carolina",
+     "rating": 64.4,
+     "slope": 112,
+     "par": 72,
+     "yardage": 5064
+    }
+   ],
+   "holes": [
+    {
+     "number": 1,
+     "par": 4,
+     "handicap": 9,
+     "yardages": {
+      "Tournament": 403,
+      "Turtle": 372,
+      "Nicklaus": 341,
+      "Kiawah": 327,
+      "Governors": 327,
+      "Carolina": 277
+     }
+    },
+    {
+     "number": 2,
+     "par": 5,
+     "handicap": 5,
+     "yardages": {
+      "Tournament": 523,
+      "Turtle": 501,
+      "Nicklaus": 489,
+      "Kiawah": 469,
+      "Governors": 398,
+      "Carolina": 398
+     }
+    },
+    {
+     "number": 3,
+     "par": 4,
+     "handicap": 15,
+     "yardages": {
+      "Tournament": 395,
+      "Turtle": 369,
+      "Nicklaus": 349,
+      "Kiawah": 325,
+      "Governors": 325,
+      "Carolina": 295
+     }
+    },
+    {
+     "number": 4,
+     "par": 3,
+     "handicap": 13,
+     "yardages": {
+      "Tournament": 206,
+      "Turtle": 189,
+      "Nicklaus": 180,
+      "Kiawah": 174,
+      "Governors": 129,
+      "Carolina": 129
+     }
+    },
+    {
+     "number": 5,
+     "par": 5,
+     "handicap": 7,
+     "yardages": {
+      "Tournament": 533,
+      "Turtle": 510,
+      "Nicklaus": 504,
+      "Kiawah": 450,
+      "Governors": 413,
+      "Carolina": 413
+     }
+    },
+    {
+     "number": 6,
+     "par": 4,
+     "handicap": 11,
+     "yardages": {
+      "Tournament": 387,
+      "Turtle": 375,
+      "Nicklaus": 361,
+      "Kiawah": 322,
+      "Governors": 322,
+      "Carolina": 264
+     }
+    },
+    {
+     "number": 7,
+     "par": 3,
+     "handicap": 17,
+     "yardages": {
+      "Tournament": 178,
+      "Turtle": 158,
+      "Nicklaus": 129,
+      "Kiawah": 111,
+      "Governors": 93,
+      "Carolina": 93
+     }
+    },
+    {
+     "number": 8,
+     "par": 4,
+     "handicap": 1,
+     "yardages": {
+      "Tournament": 474,
+      "Turtle": 444,
+      "Nicklaus": 415,
+      "Kiawah": 365,
+      "Governors": 308,
+      "Carolina": 308
+     }
+    },
+    {
+     "number": 9,
+     "par": 4,
+     "handicap": 3,
+     "yardages": {
+      "Tournament": 417,
+      "Turtle": 376,
+      "Nicklaus": 342,
+      "Kiawah": 320,
+      "Governors": 320,
+      "Carolina": 299
+     }
+    },
+    {
+     "number": 10,
+     "par": 5,
+     "handicap": 12,
+     "yardages": {
+      "Tournament": 530,
+      "Turtle": 512,
+      "Nicklaus": 501,
+      "Kiawah": 467,
+      "Governors": 434,
+      "Carolina": 434
+     }
+    },
+    {
+     "number": 11,
+     "par": 4,
+     "handicap": 6,
+     "yardages": {
+      "Tournament": 392,
+      "Turtle": 362,
+      "Nicklaus": 343,
+      "Kiawah": 319,
+      "Governors": 319,
+      "Carolina": 263
+     }
+    },
+    {
+     "number": 12,
+     "par": 4,
+     "handicap": 4,
+     "yardages": {
+      "Tournament": 440,
+      "Turtle": 422,
+      "Nicklaus": 410,
+      "Kiawah": 390,
+      "Governors": 345,
+      "Carolina": 345
+     }
+    },
+    {
+     "number": 13,
+     "par": 5,
+     "handicap": 10,
+     "yardages": {
+      "Tournament": 520,
+      "Turtle": 503,
+      "Nicklaus": 477,
+      "Kiawah": 462,
+      "Governors": 405,
+      "Carolina": 405
+     }
+    },
+    {
+     "number": 14,
+     "par": 3,
+     "handicap": 16,
+     "yardages": {
+      "Tournament": 171,
+      "Turtle": 160,
+      "Nicklaus": 148,
+      "Kiawah": 133,
+      "Governors": 118,
+      "Carolina": 118
+     }
+    },
+    {
+     "number": 15,
+     "par": 4,
+     "handicap": 8,
+     "yardages": {
+      "Tournament": 375,
+      "Turtle": 342,
+      "Nicklaus": 328,
+      "Kiawah": 313,
+      "Governors": 313,
+      "Carolina": 306
+     }
+    },
+    {
+     "number": 16,
+     "par": 3,
+     "handicap": 14,
+     "yardages": {
+      "Tournament": 177,
+      "Turtle": 164,
+      "Nicklaus": 143,
+      "Kiawah": 125,
+      "Governors": 107,
+      "Carolina": 107
+     }
+    },
+    {
+     "number": 17,
+     "par": 4,
+     "handicap": 18,
+     "yardages": {
+      "Tournament": 364,
+      "Turtle": 348,
+      "Nicklaus": 316,
+      "Kiawah": 302,
+      "Governors": 302,
+      "Carolina": 278
+     }
+    },
+    {
+     "number": 18,
+     "par": 4,
+     "handicap": 2,
+     "yardages": {
+      "Tournament": 426,
+      "Turtle": 403,
+      "Nicklaus": 386,
+      "Kiawah": 372,
+      "Governors": 332,
+      "Carolina": 332
+     }
+    }
+   ]
+  },
+  {
+   "slug": "cougar",
+   "name": "Cougar Point",
+   "osmName": "Cougar Point",
+   "ogaId": "6b221da9-8a17-408d-ad03-953f615bd4dd",
+   "lat": 32.5923015902,
+   "lng": -80.1250330193,
+   "membersOnly": false,
+   "featured": false,
+   "tees": [
+    {
+     "name": "Tournament",
+     "rating": 72.7,
+     "slope": 134,
+     "par": 72,
+     "yardage": 6814
+    },
+    {
+     "name": "Cougar",
+     "rating": 71.1,
+     "slope": 132,
+     "par": 72,
+     "yardage": 6514
+    },
+    {
+     "name": "Player",
+     "rating": 69.3,
+     "slope": 124,
+     "par": 72,
+     "yardage": 6139
+    },
+    {
+     "name": "Kiawah",
+     "rating": 66.9,
+     "slope": 118,
+     "par": 72,
+     "yardage": 5608
+    },
+    {
+     "name": "Governors",
+     "rating": 64.7,
+     "slope": 116,
+     "par": 72,
+     "yardage": 5187
+    },
+    {
+     "name": "Carolina",
+     "rating": 63.0,
+     "slope": 112,
+     "par": 72,
+     "yardage": 4816
+    }
+   ],
+   "holes": [
+    {
+     "number": 1,
+     "par": 4,
+     "handicap": 13,
+     "yardages": {
+      "Tournament": 351,
+      "Cougar": 340,
+      "Player": 319,
+      "Kiawah": 282,
+      "Governors": 282,
+      "Carolina": 248
+     }
+    },
+    {
+     "number": 2,
+     "par": 3,
+     "handicap": 17,
+     "yardages": {
+      "Tournament": 175,
+      "Cougar": 162,
+      "Player": 143,
+      "Kiawah": 125,
+      "Governors": 125,
+      "Carolina": 104
+     }
+    },
+    {
+     "number": 3,
+     "par": 5,
+     "handicap": 5,
+     "yardages": {
+      "Tournament": 554,
+      "Cougar": 535,
+      "Player": 505,
+      "Kiawah": 474,
+      "Governors": 437,
+      "Carolina": 437
+     }
+    },
+    {
+     "number": 4,
+     "par": 4,
+     "handicap": 1,
+     "yardages": {
+      "Tournament": 458,
+      "Cougar": 436,
+      "Player": 402,
+      "Kiawah": 375,
+      "Governors": 333,
+      "Carolina": 333
+     }
+    },
+    {
+     "number": 5,
+     "par": 4,
+     "handicap": 7,
+     "yardages": {
+      "Tournament": 398,
+      "Cougar": 393,
+      "Player": 367,
+      "Kiawah": 335,
+      "Governors": 309,
+      "Carolina": 309
+     }
+    },
+    {
+     "number": 6,
+     "par": 3,
+     "handicap": 15,
+     "yardages": {
+      "Tournament": 182,
+      "Cougar": 166,
+      "Player": 162,
+      "Kiawah": 142,
+      "Governors": 142,
+      "Carolina": 102
+     }
+    },
+    {
+     "number": 7,
+     "par": 4,
+     "handicap": 9,
+     "yardages": {
+      "Tournament": 351,
+      "Cougar": 335,
+      "Player": 311,
+      "Kiawah": 289,
+      "Governors": 252,
+      "Carolina": 252
+     }
+    },
+    {
+     "number": 8,
+     "par": 4,
+     "handicap": 11,
+     "yardages": {
+      "Tournament": 360,
+      "Cougar": 340,
+      "Player": 320,
+      "Kiawah": 285,
+      "Governors": 285,
+      "Carolina": 229
+     }
+    },
+    {
+     "number": 9,
+     "par": 5,
+     "handicap": 3,
+     "yardages": {
+      "Tournament": 550,
+      "Cougar": 536,
+      "Player": 501,
+      "Kiawah": 461,
+      "Governors": 403,
+      "Carolina": 403
+     }
+    },
+    {
+     "number": 10,
+     "par": 4,
+     "handicap": 2,
+     "yardages": {
+      "Tournament": 435,
+      "Cougar": 409,
+      "Player": 389,
+      "Kiawah": 348,
+      "Governors": 289,
+      "Carolina": 289
+     }
+    },
+    {
+     "number": 11,
+     "par": 5,
+     "handicap": 10,
+     "yardages": {
+      "Tournament": 489,
+      "Cougar": 474,
+      "Player": 455,
+      "Kiawah": 411,
+      "Governors": 411,
+      "Carolina": 340
+     }
+    },
+    {
+     "number": 12,
+     "par": 3,
+     "handicap": 16,
+     "yardages": {
+      "Tournament": 221,
+      "Cougar": 203,
+      "Player": 190,
+      "Kiawah": 148,
+      "Governors": 129,
+      "Carolina": 129
+     }
+    },
+    {
+     "number": 13,
+     "par": 4,
+     "handicap": 8,
+     "yardages": {
+      "Tournament": 413,
+      "Cougar": 388,
+      "Player": 377,
+      "Kiawah": 348,
+      "Governors": 348,
+      "Carolina": 291
+     }
+    },
+    {
+     "number": 14,
+     "par": 3,
+     "handicap": 18,
+     "yardages": {
+      "Tournament": 174,
+      "Cougar": 169,
+      "Player": 153,
+      "Kiawah": 129,
+      "Governors": 129,
+      "Carolina": 114
+     }
+    },
+    {
+     "number": 15,
+     "par": 5,
+     "handicap": 4,
+     "yardages": {
+      "Tournament": 537,
+      "Cougar": 512,
+      "Player": 496,
+      "Kiawah": 477,
+      "Governors": 413,
+      "Carolina": 413
+     }
+    },
+    {
+     "number": 16,
+     "par": 4,
+     "handicap": 14,
+     "yardages": {
+      "Tournament": 400,
+      "Cougar": 383,
+      "Player": 361,
+      "Kiawah": 332,
+      "Governors": 332,
+      "Carolina": 296
+     }
+    },
+    {
+     "number": 17,
+     "par": 4,
+     "handicap": 12,
+     "yardages": {
+      "Tournament": 366,
+      "Cougar": 356,
+      "Player": 331,
+      "Kiawah": 306,
+      "Governors": 306,
+      "Carolina": 265
+     }
+    },
+    {
+     "number": 18,
+     "par": 4,
+     "handicap": 6,
+     "yardages": {
+      "Tournament": 400,
+      "Cougar": 377,
+      "Player": 357,
+      "Kiawah": 341,
+      "Governors": 262,
+      "Carolina": 262
+     }
+    }
+   ]
+  },
+  {
+   "slug": "osprey",
+   "name": "Osprey Point",
+   "osmName": "Osprey Point",
+   "ogaId": "2498ebe7-13ba-428e-854a-e1598a092007",
+   "lat": 32.6142100884,
+   "lng": -80.053178072,
+   "membersOnly": false,
+   "featured": false,
+   "tees": [
+    {
+     "name": "Tournament",
+     "rating": 72.8,
+     "slope": 135,
+     "par": 72,
+     "yardage": 6902
+    },
+    {
+     "name": "Osprey",
+     "rating": 70.5,
+     "slope": 133,
+     "par": 72,
+     "yardage": 6545
+    },
+    {
+     "name": "Fazio",
+     "rating": 69.0,
+     "slope": 130,
+     "par": 72,
+     "yardage": 6162
+    },
+    {
+     "name": "Kiawah",
+     "rating": 65.2,
+     "slope": 114,
+     "par": 72,
+     "yardage": 5376
+    },
+    {
+     "name": "Governor's",
+     "rating": 64.0,
+     "slope": 111,
+     "par": 72,
+     "yardage": 5123
+    },
+    {
+     "name": "Carolina",
+     "rating": 62.8,
+     "slope": 102,
+     "par": 72,
+     "yardage": 4746
+    }
+   ],
+   "holes": [
+    {
+     "number": 1,
+     "par": 4,
+     "handicap": 11,
+     "yardages": {
+      "Tournament": 410,
+      "Osprey": 399,
+      "Fazio": 381,
+      "Kiawah": 350,
+      "Governor's": 314,
+      "Carolina": 314
+     }
+    },
+    {
+     "number": 2,
+     "par": 5,
+     "handicap": 5,
+     "yardages": {
+      "Tournament": 489,
+      "Osprey": 481,
+      "Fazio": 455,
+      "Kiawah": 413,
+      "Governor's": 413,
+      "Carolina": 380
+     }
+    },
+    {
+     "number": 3,
+     "par": 3,
+     "handicap": 13,
+     "yardages": {
+      "Tournament": 175,
+      "Osprey": 165,
+      "Fazio": 152,
+      "Kiawah": 118,
+      "Governor's": 118,
+      "Carolina": 118
+     }
+    },
+    {
+     "number": 4,
+     "par": 4,
+     "handicap": 1,
+     "yardages": {
+      "Tournament": 425,
+      "Osprey": 413,
+      "Fazio": 390,
+      "Kiawah": 350,
+      "Governor's": 297,
+      "Carolina": 297
+     }
+    },
+    {
+     "number": 5,
+     "par": 4,
+     "handicap": 9,
+     "yardages": {
+      "Tournament": 405,
+      "Osprey": 380,
+      "Fazio": 360,
+      "Kiawah": 312,
+      "Governor's": 312,
+      "Carolina": 273
+     }
+    },
+    {
+     "number": 6,
+     "par": 3,
+     "handicap": 15,
+     "yardages": {
+      "Tournament": 201,
+      "Osprey": 184,
+      "Fazio": 170,
+      "Kiawah": 154,
+      "Governor's": 139,
+      "Carolina": 139
+     }
+    },
+    {
+     "number": 7,
+     "par": 4,
+     "handicap": 17,
+     "yardages": {
+      "Tournament": 340,
+      "Osprey": 325,
+      "Fazio": 305,
+      "Kiawah": 265,
+      "Governor's": 265,
+      "Carolina": 234
+     }
+    },
+    {
+     "number": 8,
+     "par": 5,
+     "handicap": 7,
+     "yardages": {
+      "Tournament": 558,
+      "Osprey": 517,
+      "Fazio": 490,
+      "Kiawah": 455,
+      "Governor's": 396,
+      "Carolina": 396
+     }
+    },
+    {
+     "number": 9,
+     "par": 4,
+     "handicap": 3,
+     "yardages": {
+      "Tournament": 461,
+      "Osprey": 428,
+      "Fazio": 409,
+      "Kiawah": 336,
+      "Governor's": 336,
+      "Carolina": 309
+     }
+    },
+    {
+     "number": 10,
+     "par": 4,
+     "handicap": 8,
+     "yardages": {
+      "Tournament": 421,
+      "Osprey": 402,
+      "Fazio": 358,
+      "Kiawah": 331,
+      "Governor's": 331,
+      "Carolina": 291
+     }
+    },
+    {
+     "number": 11,
+     "par": 3,
+     "handicap": 16,
+     "yardages": {
+      "Tournament": 223,
+      "Osprey": 208,
+      "Fazio": 179,
+      "Kiawah": 97,
+      "Governor's": 97,
+      "Carolina": 82
+     }
+    },
+    {
+     "number": 12,
+     "par": 5,
+     "handicap": 2,
+     "yardages": {
+      "Tournament": 535,
+      "Osprey": 521,
+      "Fazio": 499,
+      "Kiawah": 428,
+      "Governor's": 400,
+      "Carolina": 400
+     }
+    },
+    {
+     "number": 13,
+     "par": 4,
+     "handicap": 12,
+     "yardages": {
+      "Tournament": 357,
+      "Osprey": 323,
+      "Fazio": 314,
+      "Kiawah": 303,
+      "Governor's": 303,
+      "Carolina": 257
+     }
+    },
+    {
+     "number": 14,
+     "par": 4,
+     "handicap": 4,
+     "yardages": {
+      "Tournament": 345,
+      "Osprey": 336,
+      "Fazio": 320,
+      "Kiawah": 293,
+      "Governor's": 293,
+      "Carolina": 245
+     }
+    },
+    {
+     "number": 15,
+     "par": 3,
+     "handicap": 18,
+     "yardages": {
+      "Tournament": 177,
+      "Osprey": 160,
+      "Fazio": 148,
+      "Kiawah": 125,
+      "Governor's": 97,
+      "Carolina": 97
+     }
+    },
+    {
+     "number": 16,
+     "par": 4,
+     "handicap": 14,
+     "yardages": {
+      "Tournament": 416,
+      "Osprey": 370,
+      "Fazio": 353,
+      "Kiawah": 286,
+      "Governor's": 286,
+      "Carolina": 245
+     }
+    },
+    {
+     "number": 17,
+     "par": 4,
+     "handicap": 10,
+     "yardages": {
+      "Tournament": 412,
+      "Osprey": 390,
+      "Fazio": 369,
+      "Kiawah": 344,
+      "Governor's": 310,
+      "Carolina": 310
+     }
+    },
+    {
+     "number": 18,
+     "par": 5,
+     "handicap": 6,
+     "yardages": {
+      "Tournament": 552,
+      "Osprey": 543,
+      "Fazio": 510,
+      "Kiawah": 416,
+      "Governor's": 416,
+      "Carolina": 359
+     }
+    }
+   ]
+  },
+  {
+   "slug": "oak",
+   "name": "Oak Point",
+   "osmName": "Oak Point",
+   "ogaId": "f039f5f9-ed85-4ec5-b4e5-cfe5451f68a0",
+   "lat": 32.6164648164,
+   "lng": -80.1409828663,
+   "membersOnly": false,
+   "featured": false,
+   "tees": [
+    {
+     "name": "Tournament",
+     "rating": 71.9,
+     "slope": 130,
+     "par": 72,
+     "yardage": 6701
+    },
+    {
+     "name": "Oak",
+     "rating": 70.8,
+     "slope": 127,
+     "par": 72,
+     "yardage": 6450
+    },
+    {
+     "name": "Johnston",
+     "rating": 68.9,
+     "slope": 125,
+     "par": 72,
+     "yardage": 6105
+    },
+    {
+     "name": "Kiawah",
+     "rating": 66.5,
+     "slope": 116,
+     "par": 72,
+     "yardage": 5515
+    },
+    {
+     "name": "Carolina",
+     "rating": 63.9,
+     "slope": 102,
+     "par": 72,
+     "yardage": 4954
+    }
+   ],
+   "holes": []
+  },
+  {
+   "slug": "cassique",
+   "name": "Cassique",
+   "osmName": "Cassique",
+   "ogaId": "65c26f1a-f99a-487f-8bf5-4437cadc0dfb",
+   "lat": 32.5963148431,
+   "lng": -80.1490670443,
+   "membersOnly": true,
+   "featured": false,
+   "tees": [
+    {
+     "name": "Gold",
+     "rating": 75.0,
+     "slope": 154,
+     "par": 72,
+     "yardage": 7050
+    },
+    {
+     "name": "Blue",
+     "rating": 73.2,
+     "slope": 150,
+     "par": 72,
+     "yardage": 6640
+    },
+    {
+     "name": "White",
+     "rating": 71.3,
+     "slope": 135,
+     "par": 72,
+     "yardage": 6180
+    },
+    {
+     "name": "Green",
+     "rating": 68.4,
+     "slope": 126,
+     "par": 72,
+     "yardage": 5615
+    }
+   ],
+   "holes": [
+    {
+     "number": 1,
+     "par": 4,
+     "handicap": 6,
+     "yardages": {
+      "Blue": 385,
+      "Gold": 400,
+      "Green": 330,
+      "White": 365
+     }
+    },
+    {
+     "number": 2,
+     "par": 5,
+     "handicap": 10,
+     "yardages": {
+      "Blue": 515,
+      "Gold": 535,
+      "Green": 430,
+      "White": 480
+     }
+    },
+    {
+     "number": 3,
+     "par": 4,
+     "handicap": 4,
+     "yardages": {
+      "Blue": 425,
+      "Gold": 450,
+      "Green": 370,
+      "White": 390
+     }
+    },
+    {
+     "number": 4,
+     "par": 4,
+     "handicap": 14,
+     "yardages": {
+      "Blue": 345,
+      "Gold": 360,
+      "Green": 295,
+      "White": 310
+     }
+    },
+    {
+     "number": 5,
+     "par": 3,
+     "handicap": 18,
+     "yardages": {
+      "Blue": 150,
+      "Gold": 160,
+      "Green": 125,
+      "White": 135
+     }
+    },
+    {
+     "number": 6,
+     "par": 5,
+     "handicap": 16,
+     "yardages": {
+      "Blue": 525,
+      "Gold": 570,
+      "Green": 440,
+      "White": 485
+     }
+    },
+    {
+     "number": 7,
+     "par": 3,
+     "handicap": 12,
+     "yardages": {
+      "Blue": 200,
+      "Gold": 235,
+      "Green": 135,
+      "White": 175
+     }
+    },
+    {
+     "number": 8,
+     "par": 4,
+     "handicap": 8,
+     "yardages": {
+      "Blue": 315,
+      "Gold": 345,
+      "Green": 250,
+      "White": 290
+     }
+    },
+    {
+     "number": 9,
+     "par": 4,
+     "handicap": 2,
+     "yardages": {
+      "Blue": 410,
+      "Gold": 420,
+      "Green": 355,
+      "White": 375
+     }
+    },
+    {
+     "number": 10,
+     "par": 4,
+     "handicap": 9,
+     "yardages": {
+      "Blue": 390,
+      "Gold": 400,
+      "Green": 345,
+      "White": 355
+     }
+    },
+    {
+     "number": 11,
+     "par": 5,
+     "handicap": 5,
+     "yardages": {
+      "Blue": 555,
+      "Gold": 575,
+      "Green": 490,
+      "White": 525
+     }
+    },
+    {
+     "number": 12,
+     "par": 4,
+     "handicap": 11,
+     "yardages": {
+      "Blue": 375,
+      "Gold": 390,
+      "Green": 310,
+      "White": 360
+     }
+    },
+    {
+     "number": 13,
+     "par": 3,
+     "handicap": 13,
+     "yardages": {
+      "Blue": 155,
+      "Gold": 175,
+      "Green": 120,
+      "White": 150
+     }
+    },
+    {
+     "number": 14,
+     "par": 4,
+     "handicap": 3,
+     "yardages": {
+      "Blue": 405,
+      "Gold": 445,
+      "Green": 345,
+      "White": 395
+     }
+    },
+    {
+     "number": 15,
+     "par": 5,
+     "handicap": 15,
+     "yardages": {
+      "Blue": 520,
+      "Gold": 540,
+      "Green": 450,
+      "White": 480
+     }
+    },
+    {
+     "number": 16,
+     "par": 3,
+     "handicap": 17,
+     "yardages": {
+      "Blue": 170,
+      "Gold": 185,
+      "Green": 135,
+      "White": 155
+     }
+    },
+    {
+     "number": 17,
+     "par": 4,
+     "handicap": 7,
+     "yardages": {
+      "Blue": 385,
+      "Gold": 430,
+      "Green": 345,
+      "White": 355
+     }
+    },
+    {
+     "number": 18,
+     "par": 4,
+     "handicap": 1,
+     "yardages": {
+      "Blue": 415,
+      "Gold": 435,
+      "Green": 310,
+      "White": 400
+     }
+    }
+   ]
+  },
+  {
+   "slug": "river",
+   "name": "The River Course",
+   "osmName": "River Course",
+   "ogaId": "214dee31-8177-4b09-9c82-1a666d931806",
+   "lat": 32.6117610008,
+   "lng": -80.0992369652,
+   "membersOnly": true,
+   "featured": false,
+   "tees": [
+    {
+     "name": "Gold",
+     "rating": 76.1,
+     "slope": 155,
+     "par": 72,
+     "yardage": 7119
+    },
+    {
+     "name": "Blue",
+     "rating": 74.2,
+     "slope": 153,
+     "par": 72,
+     "yardage": 6658
+    },
+    {
+     "name": "Red",
+     "rating": 65.3,
+     "slope": 125,
+     "par": 72,
+     "yardage": 4904
+    },
+    {
+     "name": "Black",
+     "rating": 64.3,
+     "slope": 123,
+     "par": 72,
+     "yardage": 4605
+    }
+   ],
+   "holes": [
+    {
+     "number": 1,
+     "par": 4,
+     "handicap": 11,
+     "yardages": {
+      "Red": 319,
+      "Blue": 379,
+      "Gold": 405,
+      "Black": 265
+     }
+    },
+    {
+     "number": 2,
+     "par": 5,
+     "handicap": 3,
+     "yardages": {
+      "Red": 371,
+      "Blue": 538,
+      "Gold": 558,
+      "Black": 371
+     }
+    },
+    {
+     "number": 3,
+     "par": 3,
+     "handicap": 15,
+     "yardages": {
+      "Red": 140,
+      "Blue": 189,
+      "Gold": 207,
+      "Black": 130
+     }
+    },
+    {
+     "number": 4,
+     "par": 4,
+     "handicap": 13,
+     "yardages": {
+      "Red": 299,
+      "Blue": 369,
+      "Gold": 378,
+      "Black": 299
+     }
+    },
+    {
+     "number": 5,
+     "par": 4,
+     "handicap": 9,
+     "yardages": {
+      "Red": 244,
+      "Blue": 321,
+      "Gold": 343,
+      "Black": 244
+     }
+    },
+    {
+     "number": 6,
+     "par": 3,
+     "handicap": 17,
+     "yardages": {
+      "Red": 104,
+      "Blue": 160,
+      "Gold": 179,
+      "Black": 104
+     }
+    },
+    {
+     "number": 7,
+     "par": 4,
+     "handicap": 5,
+     "yardages": {
+      "Red": 278,
+      "Blue": 432,
+      "Gold": 482,
+      "Black": 278
+     }
+    },
+    {
+     "number": 8,
+     "par": 5,
+     "handicap": 1,
+     "yardages": {
+      "Red": 409,
+      "Blue": 505,
+      "Gold": 547,
+      "Black": 409
+     }
+    },
+    {
+     "number": 9,
+     "par": 4,
+     "handicap": 7,
+     "yardages": {
+      "Red": 291,
+      "Blue": 408,
+      "Gold": 422,
+      "Black": 291
+     }
+    },
+    {
+     "number": 10,
+     "par": 4,
+     "handicap": 2,
+     "yardages": {
+      "Red": 313,
+      "Blue": 421,
+      "Gold": 445,
+      "Black": 257
+     }
+    },
+    {
+     "number": 11,
+     "par": 4,
+     "handicap": 14,
+     "yardages": {
+      "Red": 290,
+      "Blue": 369,
+      "Gold": 388,
+      "Black": 290
+     }
+    },
+    {
+     "number": 12,
+     "par": 3,
+     "handicap": 16,
+     "yardages": {
+      "Red": 109,
+      "Blue": 176,
+      "Gold": 202,
+      "Black": 109
+     }
+    },
+    {
+     "number": 13,
+     "par": 5,
+     "handicap": 6,
+     "yardages": {
+      "Red": 349,
+      "Blue": 498,
+      "Gold": 516,
+      "Black": 303
+     }
+    },
+    {
+     "number": 14,
+     "par": 4,
+     "handicap": 10,
+     "yardages": {
+      "Red": 254,
+      "Blue": 416,
+      "Gold": 444,
+      "Black": 254
+     }
+    },
+    {
+     "number": 15,
+     "par": 4,
+     "handicap": 12,
+     "yardages": {
+      "Red": 296,
+      "Blue": 397,
+      "Gold": 421,
+      "Black": 296
+     }
+    },
+    {
+     "number": 16,
+     "par": 5,
+     "handicap": 8,
+     "yardages": {
+      "Red": 413,
+      "Blue": 501,
+      "Gold": 529,
+      "Black": 316
+     }
+    },
+    {
+     "number": 17,
+     "par": 3,
+     "handicap": 18,
+     "yardages": {
+      "Red": 127,
+      "Blue": 168,
+      "Gold": 213,
+      "Black": 91
+     }
+    },
+    {
+     "number": 18,
+     "par": 4,
+     "handicap": 4,
+     "yardages": {
+      "Red": 298,
+      "Blue": 411,
+      "Gold": 440,
+      "Black": 298
+     }
+    }
+   ]
+  }
+ ]
+}
