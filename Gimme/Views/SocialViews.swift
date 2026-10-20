@@ -327,11 +327,12 @@ struct DropFoundView: View {
             Circle().fill(Self.brandGreen).frame(width: 200, height: 200)
             if let url = drop.imageURL {
                 AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
+                    image.resizable().scaledToFit().padding(26)
                 } placeholder: {
-                    ProgressView().tint(.white)
+                    ProgressView()
                 }
                 .frame(width: 184, height: 184)
+                .background(Color(white: 0.97))
                 .clipShape(Circle())
             } else {
                 Image(systemName: "gift.fill").font(.system(size: 80)).foregroundStyle(Color.gimmeGold)
@@ -435,7 +436,7 @@ private struct TrailingIconLabel: LabelStyle {
 
 /// A gentle, endless drizzle of small confetti in the brand's colors.
 private struct LightConfetti: View {
-    private let pieces = (0..<28).map { _ in
+    private let pieces = (0..<44).map { _ in
         (x: CGFloat.random(in: 0...1), delay: Double.random(in: 0...4), duration: Double.random(in: 4...7),
          color: [Color(red: 0.12, green: 0.36, blue: 0.23), Color(red: 0.09, green: 0.14, blue: 0.25),
                  .gimmeGold, Color(red: 0.56, green: 0.73, blue: 0.63)].randomElement()!,
