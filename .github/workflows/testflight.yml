@@ -14,7 +14,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    # Intel Mac: the Apple-silicon pool was too busy to pick up the first runs.
+    runs-on: macos-15-intel
     timeout-minutes: 60
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
