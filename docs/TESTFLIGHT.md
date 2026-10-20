@@ -27,8 +27,6 @@ Create the repository and add these under **Settings › Secrets and variables �
 | `ASC_KEY_ID` | Key ID from step 3 |
 | `ASC_ISSUER_ID` | Issuer ID from step 3 |
 | `ASC_KEY_P8` | The whole text of the `.p8` file, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines |
-| `SUPABASE_URL` | From step 6 |
-| `SUPABASE_ANON_KEY` | From step 6 |
 
 Every push to `main` then tests the app and uploads a new build to TestFlight (**Actions › TestFlight**). You can also run it by hand with **Run workflow**.
 
@@ -42,7 +40,7 @@ Apple needs public links to them. The pages are in `website/`.
 
 ## 6. Supabase (accounts and data)
 
-1. Create a project at [supabase.com](https://supabase.com/dashboard). Under **Project Settings › API**, copy the **Project URL** and the **anon public** key into the GitHub secrets above.
+1. Create a project at [supabase.com](https://supabase.com/dashboard). Under **Project Settings › API**, copy the **Project URL** and the **anon public** key into `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `project.yml` (they are public by design).
 2. In **SQL Editor**, run `supabase/schema.sql`, then `supabase/seed-palmetto-pine.sql` (the Palmetto & Pine drops on the Kiawah courses).
 3. **Authentication › Email Templates › Magic Link**: make the email show the code by putting `{{ .Token }}` in it, for example `Your Gimme code is {{ .Token }}`. Without this, testers get a link instead of the 6-digit code the app asks for.
 4. **Authentication › SMTP Settings**: turn on custom SMTP. Supabase's built-in email only sends a few emails an hour, which a group of testers will hit right away. [Resend](https://resend.com) is free for this volume: create an API key, then use host `smtp.resend.com`, port `465`, user `resend`, and the API key as the password.

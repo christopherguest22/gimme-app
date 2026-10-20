@@ -12,10 +12,10 @@ settings:
     MARKETING_VERSION: "0.9.0"
     # CI sets this to the run number so every TestFlight upload gets a new build.
     CURRENT_PROJECT_VERSION: "1"
-    # Leave blank to run on demo data. Fill in from Supabase › Project Settings › API,
-    # or let CI pass them in from secrets.
-    SUPABASE_URL: ""
-    SUPABASE_ANON_KEY: ""
+    # Blank runs the app on demo data. From Supabase › Project Settings › API; the anon key is
+    # meant to ship inside the app (the database rules in supabase/schema.sql protect the data).
+    SUPABASE_URL: "https://oktrqlzfkaslwigfsmbj.supabase.co"
+    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rdHJxbHpma2FzbHdpZ2ZzbWJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1MDc4MjUsImV4cCI6MjEwODA4MzgyNX0.mlDHaZM7mtraJshzkrVDet7h-_1ZFJcja5bZwcoqcOo"
 packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift

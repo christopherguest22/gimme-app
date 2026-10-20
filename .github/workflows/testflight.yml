@@ -20,8 +20,6 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
@@ -78,9 +76,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            SUPABASE_URL="$SUPABASE_URL" \
-            SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
       - name: Upload to TestFlight
         run: |
