@@ -280,7 +280,14 @@ struct DropFoundView: View {
                 }
                 greenMap
             }
-            Confetti(active: appeared)
+            // Light confetti from the top that fades out by the claim button.
+            LightConfetti()
+                .frame(height: 560)
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black.opacity(0.5), location: 0.5),
+                                             .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
         }
         .foregroundStyle(Self.navy)
         .sensoryFeedback(.success, trigger: appeared)
@@ -423,6 +430,35 @@ private struct DropPin: View {
 private struct TrailingIconLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 8) { configuration.title; configuration.icon }
+    }
+}
+
+/// A gentle, endless drizzle of small confetti in the brand's colors.
+private struct LightConfetti: View {
+    private let pieces = (0..<28).map { _ in
+        (x: CGFloat.random(in: 0...1), delay: Double.random(in: 0...4), duration: Double.random(in: 4...7),
+         color: [Color(red: 0.12, green: 0.36, blue: 0.23), Color(red: 0.09, green: 0.14, blue: 0.25),
+                 .gimmeGold, Color(red: 0.56, green: 0.73, blue: 0.63)].randomElement()!,
+         size: CGSize(width: CGFloat.random(in: 4...6), height: CGFloat.random(in: 6...10)),
+         spin: Double.random(in: 120...480))
+    }
+    @State private var falling = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(pieces.indices, id: \.self) { i in
+                let piece = pieces[i]
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(piece.color)
+                    .frame(width: piece.size.width, height: piece.size.height)
+                    .rotationEffect(.degrees(falling ? piece.spin : 0))
+                    .position(x: piece.x * geo.size.width, y: falling ? geo.size.height : -12)
+                    .animation(.linear(duration: piece.duration).delay(piece.delay).repeatForever(autoreverses: false),
+                               value: falling)
+            }
+        }
+        .onAppear { falling = true }
+        .accessibilityHidden(true)
     }
 }
 
