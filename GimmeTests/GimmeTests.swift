@@ -251,3 +251,53 @@ final class KiawahPackTests: XCTestCase {
         XCTAssertEqual(course.hole(18)?.lengthYards ?? 0, 439, accuracy: 2)
     }
 }
+
+final class SettlementTests: XCTestCase {
+    private func round(_ cards: [String: [Int?]]) -> Round {
+        let course = DemoCourse.make(firstTee: Coordinate(32.6, -80.0))
+        let players = cards.keys.sorted().map { Player(id: $0, name: $0.capitalized, avatar: "🏌️") }
+        var round = Round(course: course, players: players)
+        for (id, card) in cards {
+            for (i, strokes) in card.enumerated() { round.setStrokes(strokes, for: id, hole: i + 1) }
+        }
+        return round
+    }
+
+    func testTwoSkinsAtTenDollarsMeansEachOtherPlayerOwesTwenty() {
+        // Chris wins holes 1 and 2 outright; hole 3 is tied.
+        let r = round(["chris": [3, 3, 4], "jake": [4, 4, 4], "dev": [5, 4, 4]])
+        let balances = Settlement.balances(r, stakes: Stakes(perSkin: 10))
+        XCTAssertEqual(balances["chris"], 40)
+        XCTAssertEqual(balances["jake"], -20)
+        XCTAssertEqual(balances["dev"], -20)
+        let payments = Settlement.payments(balances)
+        XCTAssertEqual(Set(payments), [Payment(from: "jake", to: "chris", amount: 20), Payment(from: "dev", to: "chris", amount: 20)])
+    }
+
+    func testPaymentsNetOutAcrossGames() {
+        // Jake wins a skin, Chris wins two: Jake only pays Chris the difference.
+        let r = round(["chris": [3, 3, 5], "jake": [4, 4, 4]])
+        let payments = Settlement.payments(Settlement.balances(r, stakes: Stakes(perSkin: 5)))
+        XCTAssertEqual(payments, [Payment(from: "jake", to: "chris", amount: 5)])
+    }
+
+    func testNassauOnlyPaysFinishedLegs() {
+        let front = Array(repeating: Optional(4), count: 9)
+        let r = round(["chris": front.map { $0.map { $0 - 1 } }, "jake": front])
+        let stakes = Stakes(perNassauLeg: 10)
+        // Front nine finished, Chris leads: Jake owes $10. Back nine and overall aren't finished.
+        XCTAssertEqual(Settlement.balances(r, stakes: stakes)["jake"], -10)
+    }
+
+    func testBalancesAlwaysSumToZero() {
+        let r = round(["a": [3, 5, 4, 4], "b": [4, 4, 4, 3], "c": [5, 4, 3, 4], "d": [4, 4, 5, 5]])
+        let total = Settlement.balances(r, stakes: Stakes(perSkin: 7, perNassauLeg: 3)).values.reduce(0, +)
+        XCTAssertEqual(total, 0, accuracy: 0.001)
+    }
+
+    func testPayLinks() {
+        XCTAssertEqual(PayLinks.cashApp(cashtag: "$chrisg", amount: 20)?.absoluteString, "https://cash.app/$chrisg/20.00")
+        let venmo = PayLinks.venmo(handle: "@chris-g", amount: 20, note: "Skins")?.absoluteString ?? ""
+        XCTAssertTrue(venmo.hasPrefix("https://venmo.com/chris-g?txn=pay&amount=20.00"))
+    }
+}

@@ -53,6 +53,14 @@ For testing and launch, seven Kiawah Island courses ship inside the app (`Gimme/
 - **Scorecards** (par, handicap, yardage for every tee, rating and slope) come from OpenGolfAPI and were checked so each tee's hole yardages add up to its total. Tees that didn't add up were left out: Red at Cassique, and White and Green at the River Course. Oak Point's public listing has every hole as par 5, so its holes come from the map only until a real card is added.
 - **Hole positions** load from OpenStreetMap on the phone. If a course isn't mapped there, Gimme lays the holes out from the scorecard as a stand-in and shows a banner. Walking the course, use Tools › **Set tee here** and **Set green here** on each hole to pin the real spots. They're saved on the phone and used from then on.
 
+## Side games for money
+
+Set dollar stakes when you start a round, or later from Stakes on the scorecard's Side games tab: an amount per skin and per Nassau leg. Each other player in the group pays the skin winner the per-skin amount for every skin won. So if Chris wins 2 skins at $10, Jake and Dev each owe Chris $20. A Nassau leg (front 9, back 9, overall) pays its leader once the leg is finished; a tied leg pays nobody.
+
+Settle up shows who is up or down and the fewest payments that square everyone, such as "Jake pays Chris $20". Each payment has Pay on Venmo or Pay on Cash App buttons that open the app with the amount and a note filled in, plus a check to mark it paid. Golfers add their Venmo username and $Cashtag in Edit profile.
+
+Gimme never holds or moves the money. Taking deposits and paying out winnings would make Gimme a real-money gaming app and a money transmitter, which needs state licenses and Apple's approval as a gambling app. Settling directly between friends avoids all of that.
+
 ## Website
 
 `website/index.html` is the Gimme marketing site, laid out like 18birdies.com: top menu, a hero with the App Store button, a section each for GPS, scoring, community and prizes, a "For brands" section that links to the brand dashboard, and a footer. Reviews and the App Store link are placeholders until launch. Open the file in a browser, or host the `website` folder on any static host.

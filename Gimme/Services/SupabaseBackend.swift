@@ -49,6 +49,12 @@ final class SupabaseBackend: GimmeBackend {
         try await client.auth.signOut()
     }
 
+    func updatePayHandles(venmo: String?, cashApp: String?) async throws -> Player {
+        let id = try await userId()
+        try await client.from("profiles").update(["venmo": venmo, "cash_app": cashApp]).eq("id", value: id).execute()
+        return try await profile(id)
+    }
+
     private func profile(_ id: String) async throws -> Player {
         let row: ProfileRow = try await client.from("profiles").select().eq("id", value: id).single().execute().value
         return row.player
@@ -93,7 +99,7 @@ final class SupabaseBackend: GimmeBackend {
     func startRound(_ round: Round, course: Course) async throws -> Round {
         // Courses are stored on first play so drops and challenge checks can use their holes.
         try await client.from("courses").upsert(CourseRow(id: course.id, name: course.name, data: course)).execute()
-        try await client.from("rounds").insert(RoundInsert(id: round.id, course_id: course.id)).execute()
+        try await client.from("rounds").insert(RoundInsert(id: round.id, course_id: course.id, stakes: round.stakes)).execute()
         let players = round.players.compactMap { UUID(uuidString: $0.id) }.map { RoundPlayerRow(round_id: round.id, player_id: $0) }
         try await client.from("round_players").insert(players).execute()
         return round
@@ -169,9 +175,14 @@ final class SupabaseBackend: GimmeBackend {
             .execute()
     }
 
+    func saveSideBets(_ round: Round) async throws {
+        try await client.rpc("save_side_bets", params: SideBetsParams(p_round: round.id, p_stakes: round.stakes, p_paid: round.paid ?? []))
+            .execute()
+    }
+
     func pastRounds() async throws -> [Round] {
         let rows: [PastRoundRow] = try await client.from("rounds")
-            .select("id, started_at, course:courses(id, name, data), round_players(player:profiles(*)), scores(player_id, hole, strokes)")
+            .select("id, started_at, stakes, paid, course:courses(id, name, data), round_players(player:profiles(*)), scores(player_id, hole, strokes)")
             .not("finished_at", operator: .is, value: "null")
             .order("started_at", ascending: false)
             .limit(40)
@@ -181,6 +192,8 @@ final class SupabaseBackend: GimmeBackend {
             round.id = row.id
             round.date = row.started_at
             round.isActive = false
+            round.stakes = row.stakes
+            round.paid = row.paid
             for score in row.scores {
                 round.setStrokes(score.strokes, for: score.player_id.uuidString.lowercased(), hole: score.hole)
             }
@@ -243,8 +256,12 @@ private struct ProfileRow: Decodable {
     var name: String
     var avatar: String
     var handicap: Double?
+    var venmo: String?
+    var cash_app: String?
 
-    var player: Player { Player(id: id.uuidString.lowercased(), name: name, avatar: avatar, handicap: handicap) }
+    var player: Player {
+        Player(id: id.uuidString.lowercased(), name: name, avatar: avatar, handicap: handicap, venmo: venmo, cashApp: cash_app)
+    }
 }
 
 private struct FriendRow: Decodable { var friend: ProfileRow }
@@ -274,6 +291,13 @@ private struct CourseRow: Encodable {
 private struct RoundInsert: Encodable {
     var id: UUID
     var course_id: String
+    var stakes: Stakes?
+}
+
+private struct SideBetsParams: Encodable {
+    var p_round: UUID
+    var p_stakes: Stakes?
+    var p_paid: [String]
 }
 
 private struct RoundPlayerRow: Encodable {
@@ -311,6 +335,8 @@ private struct PastRoundRow: Decodable {
     var course: CourseData
     var round_players: [PlayerRow]
     var scores: [Score]
+    var stakes: Stakes?
+    var paid: [String]?
 }
 
 private struct DropRow: Decodable {

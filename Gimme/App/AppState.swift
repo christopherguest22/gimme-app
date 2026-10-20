@@ -199,10 +199,12 @@ final class AppState {
         _ = shots[currentHole]?.popLast()
     }
 
-    func startRound(on course: Course, with group: [Player], tee: String? = nil) async {
+    func startRound(on course: Course, with group: [Player], tee: String? = nil, stakes: Stakes? = nil) async {
         guard let me else { return }
         do {
-            let started = try await backend.startRound(Round(course: course, players: [me] + group), course: course)
+            var new = Round(course: course, players: [me] + group)
+            new.stakes = stakes?.isOn == true ? stakes : nil
+            let started = try await backend.startRound(new, course: course)
             self.course = course
             round = started
             currentHole = course.holes.map(\.number).min() ?? 1
@@ -277,6 +279,54 @@ final class AppState {
         round = nil
         course = nil
         drops = []
+    }
+
+    // MARK: Side-game money
+
+    /// Changes the stakes for the round on screen (or a finished one being settled) and tells the group.
+    func setStakes(_ stakes: Stakes, for round: Round) {
+        var updated = round
+        updated.stakes = stakes.isOn ? stakes : nil
+        save(updated)
+        guard self.round?.id == round.id else { return }
+        let parts = [stakes.perSkin > 0 ? "\(Settlement.money(stakes.perSkin)) a skin" : nil,
+                     stakes.perNassauLeg > 0 ? "\(Settlement.money(stakes.perNassauLeg)) a Nassau leg" : nil].compactMap { $0 }
+        send(parts.isEmpty ? "Side games are just for fun now." : "We're playing for " + parts.joined(separator: " and ") + ".")
+    }
+
+    /// Marks a settle-up payment as paid, or unmarks it.
+    func togglePaid(_ payment: Payment, in round: Round) {
+        var updated = round
+        var paid = Set(updated.paid ?? [])
+        if paid.contains(payment.id) { paid.remove(payment.id) } else { paid.insert(payment.id) }
+        updated.paid = paid.sorted()
+        save(updated)
+    }
+
+    func updatePayHandles(venmo: String, cashApp: String) async {
+        let clean = { (s: String) -> String? in
+            let trimmed = s.trimmingCharacters(in: CharacterSet(charactersIn: "@$ "))
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        do {
+            me = try await backend.updatePayHandles(venmo: clean(venmo), cashApp: clean(cashApp))
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func save(_ updated: Round) {
+        if round?.id == updated.id { round = updated }
+        if let i = pastRounds.firstIndex(where: { $0.id == updated.id }) { pastRounds[i] = updated }
+        Task {
+            do { try await backend.saveSideBets(updated) } catch { message = "Not saved: \(error.localizedDescription)" }
+        }
+    }
+
+    /// A player as the app knows them now, so pay handles added after the round still show.
+    func latest(_ player: Player) -> Player {
+        if player.id == me?.id, let me { return me }
+        return friends.first { $0.id == player.id } ?? player
     }
 
     func send(_ text: String) {

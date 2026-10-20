@@ -197,6 +197,7 @@ struct StartRoundView: View {
     @State private var error: String?
     /// A loaded course waiting for the golfer to pick their tees.
     @State private var choosingTees: Course?
+    @State private var stakes = Stakes()
 
     var body: some View {
         NavigationStack {
@@ -219,6 +220,10 @@ struct StartRoundView: View {
                         }
                         .foregroundStyle(.primary)
                     }
+                }
+
+                if !group.isEmpty {
+                    StakesEditor(stakes: $stakes)
                 }
 
                 Section {
@@ -318,7 +323,7 @@ struct StartRoundView: View {
 
     private func start(_ course: Course, tee: String? = nil) {
         Task {
-            await app.startRound(on: course, with: players, tee: tee)
+            await app.startRound(on: course, with: players, tee: tee, stakes: stakes)
             if app.round != nil {
                 dismiss()
                 onStart()

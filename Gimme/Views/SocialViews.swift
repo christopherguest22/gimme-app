@@ -441,6 +441,8 @@ struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var avatar = "🏌️"
+    @State private var venmo = ""
+    @State private var cashApp = ""
 
     var body: some View {
         NavigationStack {
@@ -448,6 +450,16 @@ struct EditProfileView: View {
                 TextField("Name", text: $name)
                 AvatarPicker(selection: $avatar)
                     .listRowBackground(Color.gimmeGreen.opacity(0.8))
+                Section {
+                    TextField("Venmo username", text: $venmo)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Cash App $cashtag", text: $cashApp)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                } header: {
+                    Text("Get paid for side games")
+                } footer: {
+                    Text("Friends see these so they can pay you skins and Nassau winnings in Venmo or Cash App.")
+                }
             }
             .navigationTitle("Edit profile")
             .toolbar {
@@ -456,6 +468,7 @@ struct EditProfileView: View {
                     Button("Save") {
                         Task {
                             await app.updateProfile(name: name, avatar: avatar)
+                            await app.updatePayHandles(venmo: venmo, cashApp: cashApp)
                             dismiss()
                         }
                     }
@@ -465,6 +478,8 @@ struct EditProfileView: View {
             .onAppear {
                 name = app.me?.name ?? ""
                 avatar = app.me?.avatar ?? "🏌️"
+                venmo = app.me?.venmo ?? ""
+                cashApp = app.me?.cashApp ?? ""
             }
         }
     }

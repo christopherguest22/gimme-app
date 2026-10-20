@@ -89,6 +89,11 @@ enum Scoring {
         var margin: Int
         var holesCounted: Int
         var id: String { name }
+
+        /// A leg pays out once every hole in it has a score from everyone.
+        func isFinished(holes total: Int) -> Bool {
+            holesCounted > 0 && holesCounted == (name == "Overall" ? total : 9)
+        }
     }
 
     /// Nassau as stroke play: lowest total on the front nine, back nine and full 18,

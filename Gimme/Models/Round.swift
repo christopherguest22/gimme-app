@@ -7,6 +7,9 @@ struct Player: Identifiable, Codable, Hashable {
     var handicap: Double?
     /// Set for friends who are on a course right now.
     var playingNow: String?
+    /// Where friends can pay this golfer for side games.
+    var venmo: String? = nil
+    var cashApp: String? = nil
 }
 
 struct Round: Identifiable, Codable, Hashable {
@@ -19,6 +22,10 @@ struct Round: Identifiable, Codable, Hashable {
     /// Strokes per player id, indexed by hole number - 1. nil means not entered yet.
     var scores: [String: [Int?]]
     var isActive = true
+    /// Dollar stakes for skins and Nassau; nil when the group plays for fun.
+    var stakes: Stakes? = nil
+    /// Settle-up payments (`Payment.id`) that have been marked as paid.
+    var paid: [String]? = nil
 
     init(course: Course, players: [Player]) {
         courseId = course.id

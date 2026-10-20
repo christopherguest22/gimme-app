@@ -15,6 +15,8 @@ protocol GimmeBackend {
     func sendSignInCode(email: String) async throws
     func verifySignInCode(email: String, code: String) async throws -> Player
     func updateProfile(name: String, avatar: String) async throws -> Player
+    /// Venmo username and Cash App $cashtag, so the group can pay side games.
+    func updatePayHandles(venmo: String?, cashApp: String?) async throws -> Player
     func signOut() async throws
 
     // Friends and feed
@@ -29,6 +31,8 @@ protocol GimmeBackend {
     func sendChat(_ message: ChatMessage, round: Round) async throws
     func roundEvents(_ round: Round) -> AsyncStream<RoundEvent>
     func finish(_ round: Round) async throws
+    /// Saves the round's stakes and which settle-up payments are marked paid.
+    func saveSideBets(_ round: Round) async throws
     func pastRounds() async throws -> [Round]
 
     // Drops
@@ -60,9 +64,9 @@ enum ClaimError: LocalizedError {
 actor MockBackend: GimmeBackend {
     private var me: Player?
     private var friendList = [
-        Player(id: "jake", name: "Jake", avatar: "🧢", handicap: 8.4, playingNow: "Hole 6 at Pine Ridge"),
-        Player(id: "maria", name: "Maria", avatar: "⛳️", handicap: 14.2),
-        Player(id: "dev", name: "Dev", avatar: "🦅", handicap: 3.1, playingNow: "Hole 14 at Gimme Demo Links"),
+        Player(id: "jake", name: "Jake", avatar: "🧢", handicap: 8.4, playingNow: "Hole 6 at Turtle Point", venmo: "demo-jake"),
+        Player(id: "maria", name: "Maria", avatar: "⛳️", handicap: 14.2, cashApp: "demomaria"),
+        Player(id: "dev", name: "Dev", avatar: "🦅", handicap: 3.1, playingNow: "Hole 14 at Osprey Point", venmo: "demo-dev"),
         Player(id: "sam", name: "Sam", avatar: "🍺", handicap: 21.7),
     ]
     private var posts: [FeedPost] = []
@@ -96,7 +100,17 @@ actor MockBackend: GimmeBackend {
     }
 
     func updateProfile(name: String, avatar: String) async throws -> Player {
-        let player = Player(id: "me", name: name, avatar: avatar)
+        var player = me ?? Player(id: "me", name: name, avatar: avatar)
+        player.name = name
+        player.avatar = avatar
+        me = player
+        return player
+    }
+
+    func updatePayHandles(venmo: String?, cashApp: String?) async throws -> Player {
+        var player = me ?? Player(id: "me", name: "You", avatar: "🏌️")
+        player.venmo = venmo
+        player.cashApp = cashApp
         me = player
         return player
     }
@@ -185,6 +199,11 @@ actor MockBackend: GimmeBackend {
         rounds[round.id] = finished
         listeners[round.id]?.finish()
         listeners[round.id] = nil
+    }
+
+    func saveSideBets(_ round: Round) async throws {
+        rounds[round.id]?.stakes = round.stakes
+        rounds[round.id]?.paid = round.paid
     }
 
     func pastRounds() async throws -> [Round] {

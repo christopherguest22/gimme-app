@@ -202,21 +202,47 @@ struct RoundChatView: View {
 
 /// Skins and Nassau standings, updated as scores come in.
 struct SideGamesView: View {
+    @Environment(AppState.self) private var app
     let round: Round
+    @State private var editingStakes = false
+
+    /// The freshest copy of this round, so stakes and paid marks update as soon as they change.
+    private var current: Round {
+        if app.round?.id == round.id, let live = app.round { return live }
+        return app.pastRounds.first { $0.id == round.id } ?? round
+    }
+
+    private func player(_ id: String) -> Player? {
+        current.players.first { $0.id == id }.map(app.latest)
+    }
 
     private func name(_ id: String?) -> String {
-        guard let id, let player = round.players.first(where: { $0.id == id }) else { return "Tied" }
-        return "\(player.avatar) \(player.name)"
+        guard let id, let player = player(id) else { return "Tied" }
+        return id == app.myId ? "You" : player.name
     }
 
     var body: some View {
+        let round = current
+        let stakes = round.stakes ?? Stakes()
         let skins = Scoring.skins(round)
+        let others = Double(max(round.players.count - 1, 0))
         VStack(alignment: .leading, spacing: 12) {
-            Text("Side games").font(.gimme(20, .bold))
+            HStack {
+                Text("Side games").font(.gimme(20, .bold))
+                Spacer()
+                Button { editingStakes = true } label: {
+                    Label(stakes.isOn ? "Stakes" : "Play for money", systemImage: "dollarsign.circle.fill")
+                        .font(.gimme(14, .heavy))
+                }
+                .foregroundStyle(Color.gimmeLime)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Skins").font(.headline)
+                    if stakes.perSkin > 0 {
+                        Text("\(Settlement.money(stakes.perSkin)) each").font(.caption.bold()).foregroundStyle(.secondary)
+                    }
                     Spacer()
                     if skins.carryover > 0 {
                         Text("\(skins.carryover + 1) skins on the next hole")
@@ -225,18 +251,29 @@ struct SideGamesView: View {
                             .background(Color.gimmeGold.opacity(0.25), in: Capsule())
                     }
                 }
-                ForEach(round.players) { player in
+                ForEach(round.players) { p in
+                    let won = skins.skins[p.id] ?? 0
                     HStack {
-                        Text("\(player.avatar) \(player.name)")
+                        Text("\(p.avatar) \(p.name)")
                         Spacer()
-                        Text("\(skins.skins[player.id] ?? 0)").font(.gimme(17, .bold))
+                        if stakes.perSkin > 0 && won > 0 {
+                            // Every other player pays the winner the stake for each skin.
+                            Text("+\(Settlement.money(Double(won) * stakes.perSkin * others))")
+                                .font(.gimme(14, .bold)).foregroundStyle(Color.gimmeLime)
+                        }
+                        Text("\(won)").font(.gimme(17, .bold)).frame(minWidth: 24, alignment: .trailing)
                     }
                 }
             }
             .gimmeCard()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Nassau").font(.headline)
+                HStack {
+                    Text("Nassau").font(.headline)
+                    if stakes.perNassauLeg > 0 {
+                        Text("\(Settlement.money(stakes.perNassauLeg)) a leg").font(.caption.bold()).foregroundStyle(.secondary)
+                    }
+                }
                 ForEach(Scoring.nassau(round)) { leg in
                     HStack {
                         Text(leg.name)
@@ -246,12 +283,174 @@ struct SideGamesView: View {
                         } else {
                             Text(leg.leader == nil ? "All square" : "\(name(leg.leader)) by \(leg.margin)")
                                 .bold()
+                            if leg.isFinished(holes: round.pars.count) {
+                                Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.gimmeLime)
+                                    .accessibilityLabel("Final")
+                            }
                         }
                     }
                 }
             }
             .gimmeCard()
+
+            if stakes.isOn {
+                SettleUpCard(round: round)
+            }
         }
         .padding(.bottom)
+        .sheet(isPresented: $editingStakes) {
+            StakesSheet(initial: current.stakes ?? Stakes()) { app.setStakes($0, for: current) }
+                .presentationDetents([.medium])
+        }
+    }
+}
+
+/// Who's up, who's down, and the payments that square everyone, with Venmo and Cash App buttons.
+struct SettleUpCard: View {
+    @Environment(AppState.self) private var app
+    @Environment(\.openURL) private var openURL
+    let round: Round
+
+    private func player(_ id: String) -> Player? { round.players.first { $0.id == id }.map(app.latest) }
+    private func label(_ id: String) -> String { id == app.myId ? "You" : player(id)?.name ?? "Golfer" }
+
+    var body: some View {
+        let stakes = round.stakes ?? Stakes()
+        let balances = Settlement.balances(round, stakes: stakes)
+        let payments = Settlement.payments(balances)
+        let paid = Set(round.paid ?? [])
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Settle up").font(.headline)
+                Spacer()
+                Text(round.isActive ? "So far" : "Final").font(.caption.bold()).foregroundStyle(.secondary)
+            }
+            ForEach(round.players) { p in
+                let amount = balances[p.id] ?? 0
+                HStack {
+                    Text("\(p.avatar) \(label(p.id))")
+                    Spacer()
+                    Text(amount > 0.005 ? "+\(Settlement.money(amount))" : amount < -0.005 ? "−\(Settlement.money(-amount))" : "Even")
+                        .font(.gimme(16, .heavy))
+                        .foregroundStyle(amount > 0.005 ? Color.gimmeLime : amount < -0.005 ? Color.gimmeBogey : .secondary)
+                }
+            }
+            if !payments.isEmpty {
+                Divider()
+                ForEach(payments) { payment in
+                    paymentRow(payment, isPaid: paid.contains(payment.id))
+                }
+            }
+            Text("Gimme doesn't hold or move money. Payments happen in Venmo or Cash App, and anyone in the group can mark them paid.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .gimmeCard(highlight: .gimmeGold)
+    }
+
+    @ViewBuilder
+    private func paymentRow(_ payment: Payment, isPaid: Bool) -> some View {
+        let note = "Gimme side games · \(round.courseName)"
+        let payee = player(payment.to)
+        let payer = player(payment.from)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("\(label(payment.from)) → \(label(payment.to))")
+                    .strikethrough(isPaid)
+                Spacer()
+                Text(Settlement.money(payment.amount)).font(.gimme(17, .heavy)).strikethrough(isPaid)
+                Button { app.togglePaid(payment, in: round) } label: {
+                    Image(systemName: isPaid ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22))
+                        .foregroundStyle(isPaid ? Color.gimmeLime : .secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(isPaid ? "Marked paid. Tap to undo" : "Mark paid")
+            }
+            if !isPaid {
+                if payment.from == app.myId {
+                    HStack(spacing: 8) {
+                        if let url = payee?.venmo.flatMap({ PayLinks.venmo(handle: $0, amount: payment.amount, note: note) }) {
+                            Button("Pay on Venmo") { openURL(url) }.buttonStyle(.gimme)
+                        }
+                        if let url = payee?.cashApp.flatMap({ PayLinks.cashApp(cashtag: $0, amount: payment.amount) }) {
+                            Button("Pay on Cash App") { openURL(url) }.buttonStyle(.gimme)
+                        }
+                    }
+                    if payee?.venmo == nil && payee?.cashApp == nil {
+                        Text("\(label(payment.to)) hasn't added Venmo or Cash App yet.").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else if payment.to == app.myId, let url = payer?.venmo.flatMap({ PayLinks.venmo(handle: $0, amount: payment.amount, note: note, request: true) }) {
+                    Button("Request on Venmo") { openURL(url) }.buttonStyle(.gimme)
+                }
+            }
+        }
+    }
+}
+
+/// Edits a copy of the stakes and saves once, on Save, so the group gets one chat message.
+struct StakesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: Stakes
+    var onSave: (Stakes) -> Void
+
+    init(initial: Stakes, onSave: @escaping (Stakes) -> Void) {
+        _draft = State(initialValue: initial)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form { StakesEditor(stakes: $draft) }
+                .navigationTitle("Stakes")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { onSave(draft); dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+/// Dollar amount pickers for skins and Nassau, used when starting a round and from the scorecard.
+struct StakesEditor: View {
+    @Binding var stakes: Stakes
+    private let presets: [Double] = [0, 1, 2, 5, 10, 20]
+
+    var body: some View {
+        Section {
+            row("Per skin", value: $stakes.perSkin)
+            row("Per Nassau leg", value: $stakes.perNassauLeg)
+        } header: {
+            Text("Play for money")
+        } footer: {
+            Text("Skins: everyone else pays the winner this much for each skin. Nassau: everyone else pays the leader of the front 9, back 9 and overall once each one finishes.")
+        }
+    }
+
+    private func row(_ title: String, value: Binding<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                Spacer()
+                TextField("0", value: value, format: .currency(code: "USD"))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 90)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(presets, id: \.self) { amount in
+                        Button(amount == 0 ? "Off" : Settlement.money(amount)) { value.wrappedValue = amount }
+                            .font(.gimme(13, .heavy))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(value.wrappedValue == amount ? Color.gimmeLime : Color.gimmeSurfaceRaised, in: Capsule())
+                            .foregroundStyle(value.wrappedValue == amount ? Color.black : Color.white)
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
     }
 }

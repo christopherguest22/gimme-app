@@ -8,7 +8,9 @@ create table profiles (
   handle text unique not null,            -- what friends type to add you
   avatar text not null default '🏌️',
   handicap numeric(3,1),
-  share_location boolean not null default true
+  share_location boolean not null default true,
+  venmo text,                             -- where friends pay you for side games
+  cash_app text
 );
 
 -- Every new sign-in gets a profile, named from the email address.
@@ -41,7 +43,9 @@ create table rounds (
   course_id text references courses not null,
   created_by uuid references profiles not null default auth.uid(),
   started_at timestamptz not null default now(),
-  finished_at timestamptz
+  finished_at timestamptz,
+  stakes jsonb,                           -- {"perSkin": 10, "perNassauLeg": 5}; null = playing for fun
+  paid jsonb not null default '[]'        -- settle-up payments marked paid, as "fromId>toId"
 );
 
 create table round_players (
@@ -178,6 +182,16 @@ begin
   insert into drop_claims (drop_id, user_id, round_id, code) values (p_drop, auth.uid(), p_round, new_code);
   update drops set remaining = remaining - 1 where id = p_drop;
   return new_code;
+end $$;
+
+-- Anyone in the round can set the side-game stakes and mark settle-up payments as paid.
+-- Gimme never moves money; golfers pay each other in Venmo or Cash App.
+create function save_side_bets(p_round uuid, p_stakes jsonb default null, p_paid jsonb default '[]') returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not in_round(p_round) then raise exception 'not in this round'; end if;
+  if jsonb_typeof(coalesce(p_paid, '[]')) <> 'array' then raise exception 'paid must be a list'; end if;
+  update rounds set stakes = p_stakes, paid = coalesce(p_paid, '[]') where id = p_round;
 end $$;
 
 -- Adds a friend by handle, both ways, so you see each other's rounds in the feed.
