@@ -14,9 +14,9 @@ struct OnboardingView: View {
     enum Step { case slides, email, code, profile }
 
     private let slides: [(icon: String, title: String, text: String)] = [
+        ("gift.fill", "Win gear on the course", "Brands drop prizes on the course. Walk into the drop zone during your round and it's yours."),
         ("location.north.circle.fill", "Every yard, every hole", "GPS distances to the front, middle and back of the green, hazards and carries."),
         ("person.3.fill", "Play with your crew", "A live scorecard, skins and Nassau, and a chat for your group while you play."),
-        ("gift.fill", "Win gear on the course", "Golf brands drop prizes on holes. Sink it and it's yours."),
     ]
 
     var body: some View {
@@ -41,7 +41,7 @@ struct OnboardingView: View {
         .animation(.easeInOut, value: step)
     }
 
-    /// The putt-drop photo, darkened at the top and bottom so the text reads, and all over once
+    /// The putt photo with a prize-drop pin on the green, darkened at the top and bottom so the text reads, and all over once
     /// the golfer is typing.
     private var background: some View {
         GeometryReader { geo in
@@ -55,15 +55,15 @@ struct OnboardingView: View {
                         .init(color: .shade.opacity(0.82), location: 0),
                         .init(color: .shade.opacity(0.55), location: 0.22),
                         .init(color: .clear, location: 0.38),
-                        .init(color: .clear, location: 0.7),
-                        .init(color: .shade.opacity(0.7), location: 0.84),
-                        .init(color: .shade.opacity(0.9), location: 1),
+                        .init(color: .clear, location: 0.8),
+                        .init(color: .shade.opacity(0.75), location: 0.9),
+                        .init(color: .shade.opacity(0.92), location: 1),
                     ], startPoint: .top, endPoint: .bottom)
                 }
                 .overlay { Color.shade.opacity(step == .slides ? 0 : 0.55) }
         }
         .ignoresSafeArea()
-        .accessibilityLabel("A golfer celebrates as his putt drops into the hole")
+        .accessibilityLabel("A golfer celebrates his putt while a gold map pin marks a prize drop on the green")
     }
 
     private var slidesView: some View {
