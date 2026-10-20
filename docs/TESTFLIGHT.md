@@ -42,8 +42,8 @@ Apple needs public links to them. The pages are in `website/`.
 
 1. Create a project at [supabase.com](https://supabase.com/dashboard). Under **Project Settings › API**, copy the **Project URL** and the **anon public** key into `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `project.yml` (they are public by design).
 2. In **SQL Editor**, run `supabase/schema.sql`, then `supabase/seed-palmetto-pine.sql` (the Palmetto & Pine drops on the Kiawah courses).
-3. **Authentication › Email Templates › Magic Link**: make the email show the code by putting `{{ .Token }}` in it, for example `Your Gimme code is {{ .Token }}`. Without this, testers get a link instead of the 6-digit code the app asks for.
-4. **Authentication › SMTP Settings**: turn on custom SMTP. Supabase's built-in email only sends a few emails an hour, which a group of testers will hit right away. [Resend](https://resend.com) is free for this volume: create an API key, then use host `smtp.resend.com`, port `465`, user `resend`, and the API key as the password.
+3. **Authentication › Emails**: in both **Magic Link** and **Confirm signup**, set the subject to `Your Gimme code` and the body to `<h2>Welcome to Gimme</h2><p>Your sign-in code is <strong>{{ .Token }}</strong></p>`. Without this, testers get a link instead of the 6-digit code the app asks for.
+4. **Authentication › Emails › SMTP Settings**: turn on custom SMTP. Supabase's built-in email only reaches members of your Supabase team, so testers would never get a code. A Gmail account works for a beta: turn on 2-Step Verification, create an app password (Google Account › Security › App passwords), then use host `smtp.gmail.com`, port `465`, the Gmail address as username and sender, and the app password.
 5. **Authentication › Users › Add user**: create a reviewer account with an email and a password, and tick **Auto Confirm User**. Apple's reviewer signs in by typing that email, tapping **Email me a code**, then **Sign in with a password instead**.
 
 ## 7. LiveKit (live video)
