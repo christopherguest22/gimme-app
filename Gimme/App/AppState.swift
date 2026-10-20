@@ -39,11 +39,25 @@ final class AppState {
     var justWon: WonPrize?
     var message: String?
 
+    /// Friends can watch this round live while this is on.
+    var isLive = false
+    /// The golfer's own camera stream while live.
+    let hostVideo = LiveVideo()
+    /// The hottest clip someone posted on the hole the golfer is playing, shown on the GPS screen.
+    var trendingHere: FeedPost?
+    /// Post prizes won, trending holes and going live to the feed automatically.
+    var shareActivity = UserDefaults.standard.object(forKey: "gimme.shareActivity") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(shareActivity, forKey: "gimme.shareActivity") }
+    }
+
     var isDemo: Bool { backend is MockBackend }
 
     private var triedDrops = Set<String>()
     private var lastPoint: Coordinate?
     private var liveUpdates: Task<Void, Never>?
+    /// Holes this round where a trending post already went out, so it posts once per hole.
+    private var trendingPosted = Set<Int>()
+    private var livePositionSent: Date?
 
     init(backend: any GimmeBackend = BackendFactory.make()) {
         self.backend = backend
@@ -225,6 +239,9 @@ final class AppState {
             chat = []
             drops = (try? await backend.drops(for: course)) ?? []
             listen(to: started)
+            trendingPosted = []
+            isLive = false
+            Task { await holeChanged() }
             Notifier.requestPermission()
         } catch {
             message = error.localizedDescription
@@ -269,13 +286,19 @@ final class AppState {
     func goToHole(_ number: Int) {
         guard let course, course.hole(number) != nil else { return }
         currentHole = number
-        Task { await refreshConditions() }
+        Task {
+            await refreshConditions()
+            await holeChanged()
+        }
     }
 
     func finishRound() async {
         guard var finished = round, let me else { return }
         finished.isActive = false
         liveUpdates?.cancel()
+        if isLive { await setLive(false) }
+        await hostVideo.stop()
+        trendingHere = nil
         try? await backend.finish(finished)
         pastRounds.insert(finished, at: 0)
         let post = FeedPost(author: me, kind: .round,
@@ -322,6 +345,14 @@ final class AppState {
         }
     }
 
+    func updateHomeCourse(_ name: String?) async {
+        do {
+            me = try await backend.updateHomeCourse(name?.isEmpty == true ? nil : name)
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func save(_ updated: Round) {
         if round?.id == updated.id { round = updated }
         if let i = pastRounds.firstIndex(where: { $0.id == updated.id }) { pastRounds[i] = updated }
@@ -355,6 +386,13 @@ final class AppState {
         if let next = course.hole(currentHole + 1), Geo.meters(point, next.tee) < 25,
            round?.strokes(myId, hole: currentHole) != nil {
             currentHole = next.number
+            Task { await holeChanged() }
+        }
+
+        // Friends watching live see the golfer move, a few times a minute.
+        if isLive, let round, Date.now.timeIntervalSince(livePositionSent ?? .distantPast) > 10 {
+            livePositionSent = .now
+            try? await backend.updateLivePosition(LivePosition(playerId: myId, hole: currentHole, point: point), round: round)
         }
 
         for drop in drops where drop.contains(point) && !triedDrops.contains(drop.id) {
@@ -384,6 +422,7 @@ final class AppState {
             wallet.insert(prize, at: 0)
             if let i = drops.firstIndex(where: { $0.id == drop.id }) { drops[i].remaining = prize.drop.remaining }
             justWon = prize
+            if shareActivity { await share(prize) }
             Notifier.post(title: "You found a drop! 🎁", body: "\(prize.drop.brand): \(prize.drop.prize). It's in your wallet.")
         } catch {
             message = error.localizedDescription
@@ -393,17 +432,123 @@ final class AppState {
     func share(_ prize: WonPrize) async {
         guard let me else { return }
         let post = FeedPost(author: me, kind: .drop,
-                            title: "Won \(prize.drop.prize.lowercased()) on hole \(prize.drop.holeNumber)",
-                            detail: "\(prize.drop.brand) drop on Gimme")
+                            title: "Won \(prize.drop.prize.lowercased()) on \(prize.drop.holeNumber)",
+                            detail: "\(prize.drop.brand) drop on Gimme",
+                            courseId: course?.id, courseName: course?.name, hole: prize.drop.holeNumber,
+                            imageURL: prize.drop.imageURL)
         try? await backend.publish(post)
         feed = (try? await backend.feed()) ?? feed
         if round != nil { send("🎁 Just won \(prize.drop.prize) from \(prize.drop.brand)!") }
     }
 
-    func toggleLike(_ post: FeedPost) {
+    // MARK: Feed
+
+    /// Likes or congratulates a post, or takes it back. Updates on screen first.
+    func toggle(_ reaction: Reaction, on post: FeedPost) {
         guard let i = feed.firstIndex(where: { $0.id == post.id }) else { return }
-        feed[i].likedByMe.toggle()
-        feed[i].likes += feed[i].likedByMe ? 1 : -1
+        let on: Bool
+        switch reaction {
+        case .like:
+            feed[i].likedByMe.toggle()
+            on = feed[i].likedByMe
+            feed[i].likes += on ? 1 : -1
+        case .congrats:
+            feed[i].congratsByMe.toggle()
+            on = feed[i].congratsByMe
+            feed[i].congrats += on ? 1 : -1
+        }
+        let saved = feed[i]
+        Task { try? await backend.react(reaction, on: saved, on) }
+    }
+
+    func comments(on post: FeedPost) async -> [FeedComment] {
+        (try? await backend.comments(on: post)) ?? []
+    }
+
+    func comment(_ text: String, on post: FeedPost) async -> FeedComment? {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let comment = try? await backend.comment(clean, on: post) else { return nil }
+        if let i = feed.firstIndex(where: { $0.id == post.id }) { feed[i].comments += 1 }
+        return comment
+    }
+
+    /// Counts a play of someone else's clip.
+    func viewed(_ post: FeedPost) {
+        guard post.kind == .clip, post.author.id != myId else { return }
+        if let i = feed.firstIndex(where: { $0.id == post.id }) { feed[i].views += 1 }
+        Task { try? await backend.recordView(post) }
+    }
+
+    /// Uploads a clip and posts it, tagged with the hole when it was filmed during a round.
+    func postClip(_ file: URL, caption: String, audience: FeedPost.Audience) async -> Bool {
+        guard let me else { return false }
+        do {
+            let url = try await backend.uploadClip(file)
+            let text = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+            let playing = round != nil
+            let post = FeedPost(author: me, kind: .clip,
+                                title: text.isEmpty ? (playing ? "On \(currentHole) at \(course?.name ?? "the course")" : "New clip") : text,
+                                detail: "", audience: audience,
+                                courseId: playing ? course?.id : nil, courseName: playing ? course?.name : nil,
+                                hole: playing ? currentHole : nil, videoURL: url, roundId: round?.id)
+            try await backend.publish(post)
+            feed.insert(post, at: 0)
+            if playing { send("🎥 Posted a clip from \(currentHole)") }
+            return true
+        } catch {
+            message = "Clip not posted: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// On reaching a hole: find the clip that's trending there, show it on the GPS screen, and
+    /// tell the feed the golfer is taking it on.
+    private func holeChanged() async {
+        guard let course, round != nil else { return }
+        let hole = currentHole
+        if let latest = try? await backend.feed() { feed = latest }
+        guard hole == currentHole else { return }
+        trendingHere = Trending.clip(on: hole, courseId: course.id, in: feed, excluding: myId)
+        guard let clip = trendingHere, shareActivity, !trendingPosted.contains(hole), let me else { return }
+        trendingPosted.insert(hole)
+        let post = FeedPost(author: me, kind: .trending,
+                            title: "\(me.name) is on \(hole) at \(course.name)",
+                            detail: "Where \(clip.author.name)'s clip \u{201C}\(clip.title)\u{201D} is trending. Can \(me.name) top it?",
+                            courseId: course.id, courseName: course.name, hole: hole, refPostId: clip.id)
+        try? await backend.publish(post)
+        feed.insert(post, at: 0)
+    }
+
+    // MARK: Going live
+
+    /// Lets friends watch this round: where the golfer is on the hole, the scores, their clips,
+    /// and their camera when they turn it on.
+    func setLive(_ live: Bool) async {
+        guard let round, let me else { return }
+        do {
+            try await backend.setLive(round, live)
+            isLive = live
+            guard live else { return }
+            if let point = lastPoint {
+                livePositionSent = .now
+                try? await backend.updateLivePosition(LivePosition(playerId: myId, hole: currentHole, point: point), round: round)
+            }
+            if shareActivity {
+                let post = FeedPost(author: me, kind: .live, title: "\(me.name) is live at \(round.courseName)",
+                                    detail: "Tap in and follow along.", courseId: round.courseId, courseName: round.courseName,
+                                    roundId: round.id)
+                try? await backend.publish(post)
+                feed.insert(post, at: 0)
+            }
+            send("🔴 I'm live. Friends can watch the round from Community.")
+        } catch {
+            message = "Couldn't go live: \(error.localizedDescription)"
+        }
+    }
+
+    /// Where to stream the round's camera, or watch it: a LiveKit server and an access token.
+    func videoAccess(roundId: UUID, publish: Bool) async -> LiveVideoAccess? {
+        try? await backend.liveVideoAccess(roundId: roundId, publish: publish)
     }
 
     var handicapEstimate: Double? {

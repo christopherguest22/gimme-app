@@ -61,6 +61,24 @@ Settle up shows who is up or down and the fewest payments that square everyone, 
 
 Gimme never holds or moves the money. Taking deposits and paying out winnings would make Gimme a real-money gaming app and a money transmitter, which needs state licenses and Apple's approval as a gambling app. Settling directly between friends avoids all of that.
 
+## Community feed and going live
+
+Community works like TikTok meets LinkedIn. You swipe up through full-screen posts: video clips filmed on the course, prizes won, finished rounds, and friends going live. Each post carries the golfer's card the way LinkedIn does, with their name, handicap, home course and a Connect button, and prizes and rounds get a Congratulate button. The tabs are For You (the hottest posts first, with live rounds pinned on top), Following (your friends), and Network (your profile card, who's live now, the handicap leaderboard and your friends).
+
+The app posts on its own (golfers can turn this off in Edit profile):
+- **Prize won:** when a golfer wins a drop, a post with the prize photo and the hole.
+- **Trending hole:** when a golfer reaches a hole where someone else's clip is trending (most likes, comments and views in the last 60 days), a post saying they're taking it on. The GPS screen also shows the clip so they can watch it.
+- **Going live:** when a golfer goes live.
+
+Clips are filmed from the Clip button on the GPS screen, or the + on Community, and tagged with the hole. They upload to the public `clips` storage bucket in Supabase.
+
+**Going live.** The Go live button on the GPS screen lets friends watch the round. They see where the golfer is on the satellite hole and the distance left, every score as it goes in, and they can send cheers. "Stream my camera" adds live video through LiveKit. To turn it on:
+1. Create a project at [LiveKit Cloud](https://cloud.livekit.io) and copy its URL, API key and API secret.
+2. `supabase secrets set LIVEKIT_URL=wss://<project>.livekit.cloud LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=...`
+3. `supabase functions deploy livekit-token` (the function is in `supabase/functions/livekit-token`).
+
+The function checks that only the golfer who went live can stream, and only friends of a live round (or players in it) can watch. In the demo, Jake is live at Turtle Point so you can try watching without a server; the camera needs the real setup.
+
 ## Website
 
 `website/index.html` is the Gimme marketing site, laid out like 18birdies.com: top menu, a hero with the App Store button, a section each for GPS, scoring, community and prizes, a "For brands" section that links to the brand dashboard, and a footer. Reviews and the App Store link are placeholders until launch. Open the file in a browser, or host the `website` folder on any static host.

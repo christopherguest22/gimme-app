@@ -1,173 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Community: the feed, a leaderboard of your friends, and your friends list, on one tab.
-struct CommunityView: View {
-    @Environment(AppState.self) private var app
-    @State private var pane = Pane.feed
-    @State private var draft = ""
-    @State private var addingFriend = false
-    @State private var handle = ""
-
-    enum Pane: String, CaseIterable { case feed = "Feed", leaderboard = "Leaderboard", friends = "Friends" }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("Section", selection: $pane) {
-                    ForEach(Pane.allCases, id: \.self) { Text($0.rawValue) }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        switch pane {
-                        case .feed: feed
-                        case .leaderboard: leaderboard
-                        case .friends: friendsList
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
-                }
-                .refreshable { await app.load() }
-            }
-            .background(Color.gimmeBackground)
-            .navigationTitle("Community")
-            .toolbarBackground(Color.gimmeBackground, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { addingFriend = true } label: { Image(systemName: "person.badge.plus") }
-                        .accessibilityLabel("Add a friend")
-                }
-            }
-            .alert("Add a friend", isPresented: $addingFriend) {
-                TextField("Their Gimme handle", text: $handle)
-                    .textInputAutocapitalization(.never)
-                Button("Add") {
-                    let name = handle
-                    handle = ""
-                    Task { await app.addFriend(name) }
-                }
-                Button("Cancel", role: .cancel) { handle = "" }
-            } message: {
-                Text("Your friend's handle is on their Me tab.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var feed: some View {
-        HStack(spacing: 10) {
-            if let me = app.me { AvatarView(player: me, size: 36) }
-            TextField("Share something with your crew", text: $draft)
-                .font(.gimme(15))
-            Button("Post") {
-                let text = draft
-                draft = ""
-                Task { await app.post(text) }
-            }
-            .font(.gimme(15, .bold))
-            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
-        .gimmeCard()
-
-        if app.feed.isEmpty {
-            Text("Rounds and prizes from you and your friends show up here.")
-                .foregroundStyle(.secondary).padding(.top, 20)
-        }
-        ForEach(app.feed) { post in
-            FeedRow(post: post).gimmeCard(highlight: post.kind == .drop ? Color.gimmeGold : nil)
-        }
-    }
-
-    /// Friends ranked by handicap, lowest first.
-    @ViewBuilder
-    private var leaderboard: some View {
-        let everyone = rankedPlayers
-        SectionHeader(title: "Handicap leaderboard")
-        VStack(spacing: 0) {
-            ForEach(Array(everyone.enumerated()), id: \.element.id) { index, player in
-                HStack(spacing: 12) {
-                    Text("\(index + 1)")
-                        .font(.gimme(16, .heavy))
-                        .foregroundStyle(index == 0 ? Color.gimmeGold : .secondary)
-                        .frame(width: 26)
-                    AvatarView(player: player, size: 36)
-                    Text(player.id == app.myId ? "\(player.name) (you)" : player.name).font(.gimme(15, .bold))
-                    Spacer()
-                    Text(player.handicap.map { String(format: "%.1f", $0) } ?? "–").font(.gimme(18, .heavy))
-                }
-                .padding(.vertical, 10)
-                if index < everyone.count - 1 { Divider() }
-            }
-        }
-        .gimmeCard()
-    }
-
-    private var rankedPlayers: [Player] {
-        var players = app.friends
-        if var you = app.me {
-            you.handicap = app.handicapEstimate ?? you.handicap
-            players.append(you)
-        }
-        return players.sorted { ($0.handicap ?? 99) < ($1.handicap ?? 99) }
-    }
-
-    @ViewBuilder
-    private var friendsList: some View {
-        Button { addingFriend = true } label: {
-            Label("Add a friend by handle", systemImage: "person.badge.plus")
-                .font(.gimme(15, .bold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .gimmeCard()
-        ForEach(app.friends) { friend in
-            HStack(spacing: 12) {
-                AvatarView(player: friend, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(friend.name).font(.gimme(16, .bold))
-                    Text(friend.playingNow ?? "Handicap \(friend.handicap.map { String(format: "%.1f", $0) } ?? "–")")
-                        .font(.gimme(13))
-                        .foregroundStyle(friend.playingNow == nil ? Color.secondary : Color.gimmeLime)
-                }
-                Spacer()
-            }
-            .gimmeCard()
-        }
-    }
-}
-
-struct FeedRow: View {
-    @Environment(AppState.self) private var app
-    let post: FeedPost
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                AvatarView(player: post.author, size: 34)
-                Text(post.author.name).font(.subheadline.bold())
-                Spacer()
-                Text(post.postedAt, format: .relative(presentation: .named)).font(.caption).foregroundStyle(.secondary)
-            }
-            Label(post.title, systemImage: post.icon)
-                .font(.headline)
-                .foregroundStyle(post.kind == .drop ? Color.gimmeGold : .primary)
-            if !post.detail.isEmpty {
-                Text(post.detail).font(.subheadline)
-            }
-            Button { app.toggleLike(post) } label: {
-                Label("\(post.likes)", systemImage: post.likedByMe ? "hand.thumbsup.fill" : "hand.thumbsup")
-            }
-            .buttonStyle(.borderless)
-            .font(.caption)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
+/// Prize wallet: every prize won, with its code.
 struct WalletView: View {
     @Environment(AppState.self) private var app
 
@@ -363,16 +197,22 @@ struct DropFoundView: View {
             Text("Code \(prize.code) is saved in your Prizes · \(drop.remaining) left")
                 .font(.gimme(12, .semibold)).foregroundStyle(.secondary)
                 .padding(.top, 6)
-            Button(shared ? "Shared with your crew" : "Share with your crew") {
-                Task {
-                    await app.share(prize)
-                    shared = true
+            if app.shareActivity {
+                Label("Posted to the Community feed", systemImage: "checkmark.circle.fill")
+                    .font(.gimme(14, .bold)).foregroundStyle(Self.brandGreen)
+                    .padding(.top, 2)
+            } else {
+                Button(shared ? "Posted to the Community feed" : "Post to the Community feed") {
+                    Task {
+                        await app.share(prize)
+                        shared = true
+                    }
                 }
+                .font(.gimme(14, .bold))
+                .tint(Self.brandGreen)
+                .disabled(shared)
+                .padding(.top, 2)
             }
-            .font(.gimme(14, .bold))
-            .tint(Self.brandGreen)
-            .disabled(shared)
-            .padding(.top, 2)
         }
     }
 
@@ -622,6 +462,7 @@ struct EditProfileView: View {
     @State private var avatar = "🏌️"
     @State private var venmo = ""
     @State private var cashApp = ""
+    @State private var homeCourse = ""
 
     var body: some View {
         NavigationStack {
@@ -629,6 +470,17 @@ struct EditProfileView: View {
                 TextField("Name", text: $name)
                 AvatarPicker(selection: $avatar)
                     .listRowBackground(Color.gimmeGreen.opacity(0.8))
+                Section {
+                    Picker("Home course", selection: $homeCourse) {
+                        Text("None").tag("")
+                        ForEach(CoursePack.courses) { Text($0.name).tag($0.name) }
+                    }
+                    Toggle("Post my prizes, holes and live rounds", isOn: Bindable(app).shareActivity)
+                } header: {
+                    Text("Community")
+                } footer: {
+                    Text("Your home course shows under your name on your posts. Posting shares prizes you win, holes where a clip is trending, and when you go live.")
+                }
                 Section {
                     TextField("Venmo username", text: $venmo)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -648,6 +500,7 @@ struct EditProfileView: View {
                         Task {
                             await app.updateProfile(name: name, avatar: avatar)
                             await app.updatePayHandles(venmo: venmo, cashApp: cashApp)
+                            if homeCourse != (app.me?.homeCourse ?? "") { await app.updateHomeCourse(homeCourse) }
                             dismiss()
                         }
                     }
@@ -659,6 +512,7 @@ struct EditProfileView: View {
                 avatar = app.me?.avatar ?? "🏌️"
                 venmo = app.me?.venmo ?? ""
                 cashApp = app.me?.cashApp ?? ""
+                homeCourse = app.me?.homeCourse ?? ""
             }
         }
     }

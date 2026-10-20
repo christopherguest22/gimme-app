@@ -17,13 +17,33 @@ protocol GimmeBackend {
     func updateProfile(name: String, avatar: String) async throws -> Player
     /// Venmo username and Cash App $cashtag, so the group can pay side games.
     func updatePayHandles(venmo: String?, cashApp: String?) async throws -> Player
+    /// The course shown under the golfer's name on their posts.
+    func updateHomeCourse(_ name: String?) async throws -> Player
     func signOut() async throws
 
     // Friends and feed
     func friends() async throws -> [Player]
     func addFriend(handle: String) async throws
+    /// Everything the golfer can see: public clips from anyone, and friends' posts.
     func feed() async throws -> [FeedPost]
     func publish(_ post: FeedPost) async throws
+    /// Uploads a recorded clip and returns where it can be played from.
+    func uploadClip(_ file: URL) async throws -> URL
+    func react(_ reaction: Reaction, on post: FeedPost, _ on: Bool) async throws
+    func comments(on post: FeedPost) async throws -> [FeedComment]
+    func comment(_ text: String, on post: FeedPost) async throws -> FeedComment
+    func recordView(_ post: FeedPost) async throws
+
+    // Going live
+    /// Starts or stops letting friends watch this round.
+    func setLive(_ round: Round, _ live: Bool) async throws
+    func updateLivePosition(_ position: LivePosition, round: Round) async throws
+    /// A friend's live round and its course map, for watching.
+    func watch(roundId: UUID) async throws -> (round: Round, course: Course?)
+    func liveEvents(roundId: UUID) -> AsyncStream<LiveEvent>
+    func cheer(_ text: String, roundId: UUID) async throws
+    /// Credentials for streaming (`publish`) or watching the round's camera.
+    func liveVideoAccess(roundId: UUID, publish: Bool) async throws -> LiveVideoAccess
 
     // Rounds
     func startRound(_ round: Round, course: Course) async throws -> Round
@@ -75,15 +95,38 @@ actor MockBackend: GimmeBackend {
     private var prizes: [WonPrize] = []
     private var rounds: [UUID: Round] = [:]
     private var listeners: [UUID: AsyncStream<RoundEvent>.Continuation] = [:]
+    private var commentsByPost: [UUID: [FeedComment]] = [:]
+    /// Jake's round at Turtle Point, streaming live in the demo.
+    private let jakesRound = UUID()
 
     init() {
+        friendList[0].homeCourse = "Turtle Point"
+        friendList[0].liveRoundId = jakesRound
+        friendList[1].homeCourse = "Osprey Point"
+        friendList[2].homeCourse = "The Ocean Course"
+        friendList[3].homeCourse = "Cougar Point"
+        let ocean = CoursePack.featured
+        let stranger = Player(id: "kiawah-kate", name: "Kate R.", avatar: "🐯", handicap: 5.6, homeCourse: "The Ocean Course")
         posts = [
-            FeedPost(author: friendList[2], kind: .round, title: "Shot 71 at Gimme Demo Links",
-                     detail: "-1 with 4 birdies. Putter was hot.", postedAt: .now.addingTimeInterval(-3_600), likes: 6),
-            FeedPost(author: friendList[0], kind: .drop, title: "Won a sleeve of balls on 7",
-                     detail: "Fairway Co. drop. Par or better and it's yours.", postedAt: .now.addingTimeInterval(-7_200), likes: 3),
-            FeedPost(author: friendList[1], kind: .note, title: "Saturday 8:10am, who's in?",
-                     detail: "Need a fourth.", postedAt: .now.addingTimeInterval(-86_400), likes: 2),
+            FeedPost(author: friendList[0], kind: .live, title: "Jake is live at Turtle Point",
+                     detail: "Tap in and follow along.", postedAt: .now.addingTimeInterval(-1_500),
+                     courseName: "Turtle Point", roundId: jakesRound),
+            FeedPost(author: stranger, kind: .clip, title: "Stuck it to 3 feet on 17",
+                     detail: "Over the water with a 6 iron, into the wind. #oceancourse",
+                     postedAt: .now.addingTimeInterval(-6 * 86_400), likes: 412, comments: 38, views: 9_870,
+                     audience: .everyone, courseId: ocean?.id, courseName: ocean?.name, hole: 17),
+            FeedPost(author: friendList[2], kind: .clip, title: "Drained it on 18",
+                     detail: "30 footer for birdie in front of the clubhouse.", postedAt: .now.addingTimeInterval(-2 * 86_400),
+                     likes: 96, comments: 12, views: 1_430, audience: .everyone,
+                     courseId: ocean?.id, courseName: ocean?.name, hole: 18),
+            FeedPost(author: friendList[2], kind: .round, title: "Shot 71 at The Ocean Course",
+                     detail: "-1 with 4 birdies. Putter was hot.", postedAt: .now.addingTimeInterval(-3_600), likes: 6, congrats: 9),
+            FeedPost(author: friendList[0], kind: .drop, title: "Won a Breezy Golf hat on 18",
+                     detail: "Par on the last at the Ocean Course. Breezy Golf drop.", postedAt: .now.addingTimeInterval(-7_200),
+                     likes: 3, congrats: 14, courseId: ocean?.id, courseName: ocean?.name, hole: 18,
+                     imageURL: URL(string: "https://breezygolf.com/cdn/shop/files/DoingThings_r1_4x5_BRZ-838-RH-WT-OS_2387.jpg")),
+            FeedPost(author: friendList[1], kind: .note, title: "Saturday 8:10am at Osprey, who's in?",
+                     detail: "Need a fourth.", postedAt: .now.addingTimeInterval(-86_400), likes: 2, comments: 1),
         ]
     }
 
@@ -115,6 +158,13 @@ actor MockBackend: GimmeBackend {
         return player
     }
 
+    func updateHomeCourse(_ name: String?) async throws -> Player {
+        var player = me ?? Player(id: "me", name: "You", avatar: "🏌️")
+        player.homeCourse = name
+        me = player
+        return player
+    }
+
     func signOut() async throws { me = nil }
 
     // MARK: Friends and feed
@@ -129,6 +179,98 @@ actor MockBackend: GimmeBackend {
 
     func feed() async throws -> [FeedPost] { posts.sorted { $0.postedAt > $1.postedAt } }
     func publish(_ post: FeedPost) async throws { posts.append(post) }
+
+    /// Demo clips stay on the phone.
+    func uploadClip(_ file: URL) async throws -> URL { file }
+
+    func react(_ reaction: Reaction, on post: FeedPost, _ on: Bool) async throws {
+        guard let i = posts.firstIndex(where: { $0.id == post.id }) else { return }
+        let change = on ? 1 : -1
+        switch reaction {
+        case .like:
+            posts[i].likedByMe = on
+            posts[i].likes += change
+        case .congrats:
+            posts[i].congratsByMe = on
+            posts[i].congrats += change
+        }
+    }
+
+    func comments(on post: FeedPost) async throws -> [FeedComment] {
+        if let saved = commentsByPost[post.id] { return saved }
+        let samples = ["Pure 🔥", "What club was that?", "Congrats!", "Next round is on you 😂", "That green is so fast"]
+        let sample = (0..<min(post.comments, 3)).map { i in
+            FeedComment(author: friendList[i % friendList.count], text: samples[i % samples.count],
+                        postedAt: post.postedAt.addingTimeInterval(Double(i + 1) * 600))
+        }
+        commentsByPost[post.id] = sample
+        return sample
+    }
+
+    func comment(_ text: String, on post: FeedPost) async throws -> FeedComment {
+        let comment = FeedComment(author: me ?? Player(id: "me", name: "You", avatar: "🏌️"), text: text)
+        commentsByPost[post.id, default: []].append(comment)
+        if let i = posts.firstIndex(where: { $0.id == post.id }) { posts[i].comments += 1 }
+        return comment
+    }
+
+    func recordView(_ post: FeedPost) async throws {
+        if let i = posts.firstIndex(where: { $0.id == post.id }) { posts[i].views += 1 }
+    }
+
+    // MARK: Going live
+
+    func setLive(_ round: Round, _ live: Bool) async throws {}
+    func updateLivePosition(_ position: LivePosition, round: Round) async throws {}
+
+    /// Jake's demo round: Turtle Point, a few holes in, laid out from the scorecard.
+    func watch(roundId: UUID) async throws -> (round: Round, course: Course?) {
+        guard roundId == jakesRound, let pack = CoursePack.courses.first(where: { $0.name == "Turtle Point" }) ?? CoursePack.featured else {
+            throw URLError(.resourceUnavailable)
+        }
+        let course = DemoCourse.provisional(id: pack.id, name: pack.name, around: pack.center, card: pack.scorecard)
+        var round = Round(course: course, players: [friendList[0], friendList[3]])
+        round.id = jakesRound
+        let jake = [4, 5, 3, 4, 4], sam = [5, 6, 4, 5, 5]
+        for hole in 1...5 {
+            round.setStrokes(jake[hole - 1], for: "jake", hole: hole)
+            round.setStrokes(sam[hole - 1], for: "sam", hole: hole)
+        }
+        return (round, course)
+    }
+
+    /// Jake walks hole 6, finishes it, and friends cheer along.
+    nonisolated func liveEvents(roundId: UUID) -> AsyncStream<LiveEvent> {
+        AsyncStream { continuation in
+            let task = Task {
+                guard let watched = try? await self.watch(roundId: roundId), let hole = watched.course?.hole(6) else { return }
+                let round = watched.round
+                let cheers = [("maria", "Go Jake! 🏌️"), ("dev", "Fairways and greens"), ("maria", "That's a birdie putt 👀")]
+                let friends = await self.friendsNow
+                for step in 0...12 {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if Task.isCancelled { return }
+                    let along = Geo.offset(hole.tee, meters: Geo.meters(hole.tee, hole.greenCenter) * min(Double(step) / 10, 1),
+                                           bearing: hole.bearing)
+                    continuation.yield(.position(LivePosition(playerId: "jake", hole: 6, point: along)))
+                    if step % 4 == 1, let cheer = cheers[safe: step / 4],
+                       let author = friends.first(where: { $0.id == cheer.0 }) {
+                        continuation.yield(.cheer(LiveCheer(author: author, text: cheer.1)))
+                    }
+                }
+                continuation.yield(.score(playerId: "jake", hole: 6, strokes: round.pars[5] - 1))
+                continuation.yield(.score(playerId: "sam", hole: 6, strokes: round.pars[5] + 1))
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private var friendsNow: [Player] { friendList }
+
+    func cheer(_ text: String, roundId: UUID) async throws {}
+
+    /// The demo has no video server; the tracker still works.
+    func liveVideoAccess(roundId: UUID, publish: Bool) async throws -> LiveVideoAccess { throw LiveVideoError.notSetUp }
 
     // MARK: Rounds
 

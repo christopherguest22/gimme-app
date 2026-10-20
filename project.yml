@@ -12,6 +12,9 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
     from: "2.20.0"
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    from: "2.0.0"
 targets:
   Gimme:
     type: application
@@ -19,6 +22,7 @@ targets:
     sources: [Gimme]
     dependencies:
       - package: Supabase
+      - package: LiveKit
     info:
       path: Gimme/Info.plist
       properties:
@@ -29,6 +33,8 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [location]
         NSLocationWhenInUseUsageDescription: "Gimme uses your location for distances to the green and to unlock prize drops on the hole you're playing."
+        NSCameraUsageDescription: "Gimme uses the camera to film clips of your shots and to stream your round when you go live."
+        NSMicrophoneUsageDescription: "Gimme records sound with your clips and live stream."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Gimme keeps GPS on during your round, even with your phone in your pocket, so you don't miss prize drops."
         # Leave blank to run on demo data. Fill in from Supabase › Project Settings › API.
         SupabaseURL: ""

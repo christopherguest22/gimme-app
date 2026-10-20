@@ -10,7 +10,8 @@ create table profiles (
   handicap numeric(3,1),
   share_location boolean not null default true,
   venmo text,                             -- where friends pay you for side games
-  cash_app text
+  cash_app text,
+  home_course text                        -- shown under their name on posts
 );
 
 -- Every new sign-in gets a profile, named from the email address.
@@ -45,7 +46,8 @@ create table rounds (
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   stakes jsonb,                           -- {"perSkin": 10, "perNassauLeg": 5}; null = playing for fun
-  paid jsonb not null default '[]'        -- settle-up payments marked paid, as "fromId>toId"
+  paid jsonb not null default '[]',       -- settle-up payments marked paid, as "fromId>toId"
+  live boolean not null default false     -- friends can watch while this is on
 );
 
 create table round_players (
@@ -74,10 +76,56 @@ create table chat_messages (
 create table feed_posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid references profiles not null default auth.uid(),
-  kind text not null check (kind in ('round', 'drop', 'note')),
+  kind text not null check (kind in ('round', 'drop', 'note', 'clip', 'trending', 'live')),
   title text not null,
   detail text not null default '',
+  posted_at timestamptz not null default now(),
+  audience text not null default 'friends' check (audience in ('everyone', 'friends')),
+  course_id text,
+  course_name text,
+  hole int,
+  video_url text check (video_url ~ '^https://'),
+  image_url text check (image_url ~ '^https://'),
+  round_id uuid references rounds on delete set null,
+  ref_post_id uuid references feed_posts on delete set null,
+  views int not null default 0
+);
+create index feed_posts_hole on feed_posts (course_id, hole) where kind = 'clip';
+
+-- Likes and LinkedIn-style congrats, one of each per golfer per post.
+create table post_reactions (
+  post_id uuid references feed_posts on delete cascade,
+  user_id uuid references profiles on delete cascade default auth.uid(),
+  kind text not null check (kind in ('like', 'congrats')),
+  primary key (post_id, user_id, kind)
+);
+
+create table post_comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid references feed_posts on delete cascade not null,
+  author_id uuid references profiles not null default auth.uid(),
+  body text not null check (length(body) between 1 and 500),
   posted_at timestamptz not null default now()
+);
+
+-- Where each golfer in a live round is, updated every few seconds while they play.
+create table live_positions (
+  round_id uuid references rounds on delete cascade,
+  player_id uuid references profiles default auth.uid(),
+  hole int not null,
+  lat double precision not null,
+  lon double precision not null,
+  updated_at timestamptz not null default now(),
+  primary key (round_id, player_id)
+);
+
+-- Messages from friends watching a round live.
+create table live_cheers (
+  id uuid primary key default gen_random_uuid(),
+  round_id uuid references rounds on delete cascade not null,
+  author_id uuid references profiles not null default auth.uid(),
+  body text not null check (length(body) between 1 and 200),
+  sent_at timestamptz not null default now()
 );
 
 -- Brands and the people who manage their campaigns in the brand dashboard.
@@ -243,6 +291,10 @@ alter table round_players enable row level security;
 alter table scores enable row level security;
 alter table chat_messages enable row level security;
 alter table feed_posts enable row level security;
+alter table post_reactions enable row level security;
+alter table post_comments enable row level security;
+alter table live_positions enable row level security;
+alter table live_cheers enable row level security;
 alter table drops enable row level security;
 alter table drop_visits enable row level security;
 alter table drop_claims enable row level security;
@@ -257,6 +309,17 @@ $$;
 
 create function in_round(r uuid) returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from round_players where round_id = r and player_id = auth.uid())
+$$;
+
+-- A friend's round that is live right now, or one you are playing in.
+create function can_watch(r uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select in_round(r) or exists (select 1 from rounds where id = r and live and finished_at is null and is_friend(created_by))
+$$;
+
+-- Posts you can see: public clips from anyone, plus your own and your friends'.
+create function can_see_post(p uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from feed_posts
+    where id = p and (audience = 'everyone' or author_id = auth.uid() or is_friend(author_id)))
 $$;
 
 create policy "profiles readable" on profiles for select using (true);
@@ -283,11 +346,57 @@ create policy "add players" on round_players for insert
 create policy "scores in my rounds" on scores for all using (in_round(round_id));
 create policy "chat in my rounds" on chat_messages for select using (in_round(round_id));
 create policy "post chat" on chat_messages for insert with check (in_round(round_id) and author_id = auth.uid());
-create policy "feed from friends" on feed_posts for select using (author_id = auth.uid() or is_friend(author_id));
+create policy "feed I can see" on feed_posts for select
+  using (audience = 'everyone' or author_id = auth.uid() or is_friend(author_id));
 create policy "post to feed" on feed_posts for insert with check (author_id = auth.uid());
+create policy "delete my posts" on feed_posts for delete using (author_id = auth.uid());
+create policy "reactions on posts I see" on post_reactions for select using (can_see_post(post_id));
+create policy "react" on post_reactions for insert with check (user_id = auth.uid() and can_see_post(post_id));
+create policy "unreact" on post_reactions for delete using (user_id = auth.uid());
+create policy "comments on posts I see" on post_comments for select using (can_see_post(post_id));
+create policy "comment" on post_comments for insert with check (author_id = auth.uid() and can_see_post(post_id));
+create policy "watch live rounds" on rounds for select using (can_watch(id));
+create policy "watch live players" on round_players for select using (can_watch(round_id));
+create policy "watch live scores" on scores for select using (can_watch(round_id));
+create policy "watch positions" on live_positions for select using (can_watch(round_id));
+create policy "share my position" on live_positions for all
+  using (player_id = auth.uid() and in_round(round_id)) with check (player_id = auth.uid() and in_round(round_id));
+create policy "read cheers" on live_cheers for select using (can_watch(round_id));
+create policy "cheer" on live_cheers for insert with check (author_id = auth.uid() and can_watch(round_id));
 create policy "my claims" on drop_claims for select using (user_id = auth.uid());
 -- drop_visits and drop_claims are only written through visit_drop(), claim_drop() and redeem_code().
 -- New brands are set up by you in the Supabase table editor: add a row to brands and to brand_members.
 
--- Live scorecard and chat: phones subscribe to these tables.
-alter publication supabase_realtime add table scores, chat_messages;
+-- The feed with reaction and comment counts, and the author's card, in one read.
+create view feed_view with (security_invoker = true) as
+select p.*,
+  a.name as author_name, a.avatar as author_avatar, a.handicap as author_handicap, a.home_course as author_home_course, a.handle as author_handle,
+  (select count(*) from post_reactions r where r.post_id = p.id and r.kind = 'like')::int as likes,
+  (select count(*) from post_reactions r where r.post_id = p.id and r.kind = 'congrats')::int as congrats,
+  exists (select 1 from post_reactions r where r.post_id = p.id and r.kind = 'like' and r.user_id = auth.uid()) as liked_by_me,
+  exists (select 1 from post_reactions r where r.post_id = p.id and r.kind = 'congrats' and r.user_id = auth.uid()) as congrats_by_me,
+  (select count(*) from post_comments c where c.post_id = p.id)::int as comment_count
+from feed_posts p join profiles a on a.id = p.author_id;
+
+-- Counts a play of a post someone can see.
+create function record_view(p_post uuid) returns void language sql security definer set search_path = public as $$
+  update feed_posts set views = views + 1 where id = p_post and can_see_post(p_post)
+$$;
+
+-- Going live: only the round's creator can turn it on or off, and only while it is being played.
+create function set_live(p_round uuid, p_live boolean) returns void language plpgsql security definer set search_path = public as $$
+begin
+  update rounds set live = p_live where id = p_round and created_by = auth.uid() and (finished_at is null or not p_live);
+  if not found then raise exception 'Only the golfer who started the round can go live'; end if;
+  if not p_live then delete from live_positions where round_id = p_round; end if;
+end $$;
+
+-- Video clips: anyone can play them by link; golfers upload only into their own folder.
+insert into storage.buckets (id, name, public) values ('clips', 'clips', true) on conflict (id) do nothing;
+create policy "upload my clips" on storage.objects for insert to authenticated
+  with check (bucket_id = 'clips' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "delete my clips" on storage.objects for delete to authenticated
+  using (bucket_id = 'clips' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Live scorecard and chat, and watching rounds live: phones subscribe to these tables.
+alter publication supabase_realtime add table scores, chat_messages, live_positions, live_cheers, rounds;

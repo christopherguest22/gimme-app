@@ -10,6 +10,17 @@ struct Player: Identifiable, Codable, Hashable {
     /// Where friends can pay this golfer for side games.
     var venmo: String? = nil
     var cashApp: String? = nil
+    /// The course they call home, shown on their posts the way LinkedIn shows a job title.
+    var homeCourse: String? = nil
+    /// What friends type to add them.
+    var handle: String? = nil
+    /// Set while they are streaming a round, so friends can tap in and watch.
+    var liveRoundId: UUID? = nil
+
+    /// One line under their name: "8.4 HCP · Turtle Point".
+    var headline: String {
+        [handicap.map { String(format: "%.1f HCP", $0) }, homeCourse].compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 struct Round: Identifiable, Codable, Hashable {
@@ -88,23 +99,3 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var sentAt = Date()
 }
 
-struct FeedPost: Identifiable, Codable, Hashable {
-    enum Kind: String, Codable { case round, drop, note }
-
-    var id = UUID()
-    var author: Player
-    var kind: Kind
-    var title: String
-    var detail: String
-    var postedAt = Date()
-    var likes = 0
-    var likedByMe = false
-
-    var icon: String {
-        switch kind {
-        case .round: "flag.fill"
-        case .drop: "gift.fill"
-        case .note: "text.bubble.fill"
-        }
-    }
-}

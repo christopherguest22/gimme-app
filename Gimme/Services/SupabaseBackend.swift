@@ -55,6 +55,12 @@ final class SupabaseBackend: GimmeBackend {
         return try await profile(id)
     }
 
+    func updateHomeCourse(_ name: String?) async throws -> Player {
+        let id = try await userId()
+        try await client.from("profiles").update(["home_course": name]).eq("id", value: id).execute()
+        return try await profile(id)
+    }
+
     private func profile(_ id: String) async throws -> Player {
         let row: ProfileRow = try await client.from("profiles").select().eq("id", value: id).single().execute().value
         return row.player
@@ -68,7 +74,19 @@ final class SupabaseBackend: GimmeBackend {
             .select("friend:profiles!friendships_friend_id_fkey(*)")
             .eq("user_id", value: id)
             .execute().value
-        return rows.map(\.friend.player).sorted { $0.name < $1.name }
+        var players = rows.map(\.friend.player).sorted { $0.name < $1.name }
+        // Friends streaming a round right now (the policy only shows live rounds of friends).
+        let live: [LiveRoundRow] = (try? await client.from("rounds")
+            .select("id, created_by, live, finished_at")
+            .eq("live", value: true)
+            .filter("finished_at", operator: "is", value: "null")
+            .execute().value) ?? []
+        for row in live {
+            if let i = players.firstIndex(where: { $0.id == row.created_by?.uuidString.lowercased() }) {
+                players[i].liveRoundId = row.id
+            }
+        }
+        return players
     }
 
     func addFriend(handle: String) async throws {
@@ -77,21 +95,169 @@ final class SupabaseBackend: GimmeBackend {
     }
 
     func feed() async throws -> [FeedPost] {
-        let rows: [FeedRow] = try await client.from("feed_posts")
-            .select("*, author:profiles(*)")
+        let rows: [FeedRow] = try await client.from("feed_view")
+            .select()
             .order("posted_at", ascending: false)
-            .limit(50)
+            .limit(100)
             .execute().value
-        return rows.map {
-            FeedPost(id: $0.id, author: $0.author.player, kind: FeedPost.Kind(rawValue: $0.kind) ?? .note,
-                     title: $0.title, detail: $0.detail, postedAt: $0.posted_at)
-        }
+        return rows.map(\.post)
     }
 
     func publish(_ post: FeedPost) async throws {
-        try await client.from("feed_posts")
-            .insert(FeedInsert(id: post.id, kind: post.kind.rawValue, title: post.title, detail: post.detail))
+        try await client.from("feed_posts").insert(FeedInsert(post)).execute()
+    }
+
+    /// Clips go in the public `clips` bucket, in a folder named for the golfer.
+    func uploadClip(_ file: URL) async throws -> URL {
+        let id = try await userId()
+        let path = "\(id)/\(UUID().uuidString.lowercased()).\(file.pathExtension.isEmpty ? "mov" : file.pathExtension.lowercased())"
+        let data = try Data(contentsOf: file)
+        try await client.storage.from("clips")
+            .upload(path, data: data, options: FileOptions(contentType: file.pathExtension.lowercased() == "mp4" ? "video/mp4" : "video/quicktime"))
+        return try client.storage.from("clips").getPublicURL(path: path)
+    }
+
+    func react(_ reaction: Reaction, on post: FeedPost, _ on: Bool) async throws {
+        if on {
+            try await client.from("post_reactions")
+                .upsert(ReactionRow(post_id: post.id, kind: reaction.rawValue), ignoreDuplicates: true)
+                .execute()
+        } else {
+            try await client.from("post_reactions").delete()
+                .eq("post_id", value: post.id.uuidString.lowercased())
+                .eq("user_id", value: try await userId())
+                .eq("kind", value: reaction.rawValue)
+                .execute()
+        }
+    }
+
+    func comments(on post: FeedPost) async throws -> [FeedComment] {
+        let rows: [CommentRow] = try await client.from("post_comments")
+            .select("id, body, posted_at, author:profiles(*)")
+            .eq("post_id", value: post.id.uuidString.lowercased())
+            .order("posted_at", ascending: true)
+            .execute().value
+        return rows.map(\.comment)
+    }
+
+    func comment(_ text: String, on post: FeedPost) async throws -> FeedComment {
+        let row: CommentRow = try await client.from("post_comments")
+            .insert(CommentInsert(post_id: post.id, body: text))
+            .select("id, body, posted_at, author:profiles(*)")
+            .single()
+            .execute().value
+        return row.comment
+    }
+
+    func recordView(_ post: FeedPost) async throws {
+        try await client.rpc("record_view", params: ["p_post": post.id]).execute()
+    }
+
+    // MARK: Going live
+
+    func setLive(_ round: Round, _ live: Bool) async throws {
+        try await client.rpc("set_live", params: LiveParams(p_round: round.id, p_live: live)).execute()
+    }
+
+    func updateLivePosition(_ position: LivePosition, round: Round) async throws {
+        try await client.from("live_positions")
+            .upsert(PositionRow(round_id: round.id, player_id: UUID(uuidString: position.playerId),
+                                hole: position.hole, lat: position.point.latitude, lon: position.point.longitude,
+                                updated_at: position.updatedAt))
             .execute()
+    }
+
+    func watch(roundId: UUID) async throws -> (round: Round, course: Course?) {
+        let row: PastRoundRow = try await client.from("rounds")
+            .select("id, started_at, stakes, paid, course:courses(id, name, data), round_players(player:profiles(*)), scores(player_id, hole, strokes)")
+            .eq("id", value: roundId.uuidString.lowercased())
+            .single()
+            .execute().value
+        var round = Round(course: row.course.data, players: row.round_players.map(\.player.player))
+        round.id = row.id
+        round.date = row.started_at
+        for score in row.scores {
+            round.setStrokes(score.strokes, for: score.player_id.uuidString.lowercased(), hole: score.hole)
+        }
+        return (round, row.course.data)
+    }
+
+    /// Realtime for watchers: scores, positions and cheers in the round, and the round ending.
+    func liveEvents(roundId: UUID) -> AsyncStream<LiveEvent> {
+        let client = client
+        let id = roundId.uuidString.lowercased()
+        return AsyncStream { continuation in
+            let task = Task {
+                let players = (try? await self.watch(roundId: roundId).round.players) ?? []
+                let byId = Dictionary(uniqueKeysWithValues: players.map { ($0.id, $0) })
+                let channel = client.channel("live-\(id)")
+                let scores = channel.postgresChange(AnyAction.self, schema: "public", table: "scores", filter: "round_id=eq.\(id)")
+                let positions = channel.postgresChange(AnyAction.self, schema: "public", table: "live_positions", filter: "round_id=eq.\(id)")
+                let cheers = channel.postgresChange(InsertAction.self, schema: "public", table: "live_cheers", filter: "round_id=eq.\(id)")
+                let rounds = channel.postgresChange(UpdateAction.self, schema: "public", table: "rounds", filter: "id=eq.\(id)")
+                await channel.subscribe()
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        for await change in scores {
+                            switch change {
+                            case .insert(let action):
+                                if let row = try? action.decodeRecord(as: ScoreRow.self, decoder: Self.decoder) {
+                                    continuation.yield(.score(playerId: row.player_id.uuidString.lowercased(), hole: row.hole, strokes: row.strokes))
+                                }
+                            case .update(let action):
+                                if let row = try? action.decodeRecord(as: ScoreRow.self, decoder: Self.decoder) {
+                                    continuation.yield(.score(playerId: row.player_id.uuidString.lowercased(), hole: row.hole, strokes: row.strokes))
+                                }
+                            case .delete:
+                                break
+                            }
+                        }
+                    }
+                    group.addTask {
+                        for await change in positions {
+                            let record: PositionRow?
+                            switch change {
+                            case .insert(let action): record = try? action.decodeRecord(as: PositionRow.self, decoder: Self.decoder)
+                            case .update(let action): record = try? action.decodeRecord(as: PositionRow.self, decoder: Self.decoder)
+                            case .delete: record = nil
+                            }
+                            if let record, let player = record.player_id {
+                                continuation.yield(.position(LivePosition(playerId: player.uuidString.lowercased(), hole: record.hole,
+                                                                          point: Coordinate(record.lat, record.lon), updatedAt: record.updated_at)))
+                            }
+                        }
+                    }
+                    group.addTask {
+                        for await change in cheers {
+                            guard let row = try? change.decodeRecord(as: CheerRow.self, decoder: Self.decoder) else { continue }
+                            let author = byId[row.author_id.uuidString.lowercased()]
+                                ?? Player(id: row.author_id.uuidString.lowercased(), name: "Friend", avatar: "🙂")
+                            continuation.yield(.cheer(LiveCheer(id: row.id, author: author, text: row.body, sentAt: row.sent_at)))
+                        }
+                    }
+                    group.addTask {
+                        for await change in rounds {
+                            if let row = try? change.decodeRecord(as: LiveRoundRow.self, decoder: Self.decoder),
+                               !row.live || row.finished_at != nil {
+                                continuation.yield(.ended)
+                            }
+                        }
+                    }
+                }
+                await client.removeChannel(channel)
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    func cheer(_ text: String, roundId: UUID) async throws {
+        try await client.from("live_cheers").insert(CheerInsert(round_id: roundId, body: text)).execute()
+    }
+
+    /// The `livekit-token` edge function checks the golfer may stream or watch this round.
+    func liveVideoAccess(roundId: UUID, publish: Bool) async throws -> LiveVideoAccess {
+        try await client.functions.invoke("livekit-token",
+                                          options: FunctionInvokeOptions(body: VideoTokenParams(round_id: roundId, publish: publish)))
     }
 
     // MARK: Rounds
@@ -258,21 +424,56 @@ private struct ProfileRow: Decodable {
     var handicap: Double?
     var venmo: String?
     var cash_app: String?
+    var home_course: String?
+    var handle: String?
 
     var player: Player {
-        Player(id: id.uuidString.lowercased(), name: name, avatar: avatar, handicap: handicap, venmo: venmo, cashApp: cash_app)
+        Player(id: id.uuidString.lowercased(), name: name, avatar: avatar, handicap: handicap, venmo: venmo, cashApp: cash_app,
+               homeCourse: home_course, handle: handle)
     }
 }
 
 private struct FriendRow: Decodable { var friend: ProfileRow }
 
+/// A row of `feed_view`: the post, the author's card and the counts.
 private struct FeedRow: Decodable {
     var id: UUID
+    var author_id: UUID
     var kind: String
     var title: String
     var detail: String
     var posted_at: Date
-    var author: ProfileRow
+    var audience: String
+    var course_id: String?
+    var course_name: String?
+    var hole: Int?
+    var video_url: String?
+    var image_url: String?
+    var round_id: UUID?
+    var ref_post_id: UUID?
+    var views: Int
+    var author_name: String
+    var author_avatar: String
+    var author_handicap: Double?
+    var author_home_course: String?
+    var author_handle: String?
+    var likes: Int
+    var congrats: Int
+    var liked_by_me: Bool
+    var congrats_by_me: Bool
+    var comment_count: Int
+
+    var post: FeedPost {
+        FeedPost(id: id,
+                 author: Player(id: author_id.uuidString.lowercased(), name: author_name, avatar: author_avatar,
+                                handicap: author_handicap, homeCourse: author_home_course, handle: author_handle),
+                 kind: FeedPost.Kind(rawValue: kind) ?? .note, title: title, detail: detail, postedAt: posted_at,
+                 likes: likes, likedByMe: liked_by_me, congrats: congrats, congratsByMe: congrats_by_me,
+                 comments: comment_count, views: views, audience: FeedPost.Audience(rawValue: audience) ?? .friends,
+                 courseId: course_id, courseName: course_name, hole: hole,
+                 videoURL: video_url.flatMap(URL.init(string:)), imageURL: image_url.flatMap(URL.init(string:)),
+                 roundId: round_id, refPostId: ref_post_id)
+    }
 }
 
 private struct FeedInsert: Encodable {
@@ -280,6 +481,87 @@ private struct FeedInsert: Encodable {
     var kind: String
     var title: String
     var detail: String
+    var audience: String
+    var course_id: String?
+    var course_name: String?
+    var hole: Int?
+    var video_url: String?
+    var image_url: String?
+    var round_id: UUID?
+    var ref_post_id: UUID?
+
+    init(_ post: FeedPost) {
+        id = post.id
+        kind = post.kind.rawValue
+        title = post.title
+        detail = post.detail
+        audience = post.audience.rawValue
+        course_id = post.courseId
+        course_name = post.courseName
+        hole = post.hole
+        // Only uploaded clips (https) are shared; a clip still on the phone isn't.
+        video_url = post.videoURL.flatMap { $0.scheme == "https" ? $0.absoluteString : nil }
+        image_url = post.imageURL.flatMap { $0.scheme == "https" ? $0.absoluteString : nil }
+        round_id = post.roundId
+        ref_post_id = post.refPostId
+    }
+}
+
+private struct ReactionRow: Encodable {
+    var post_id: UUID
+    var kind: String
+}
+
+private struct CommentInsert: Encodable {
+    var post_id: UUID
+    var body: String
+}
+
+private struct CommentRow: Decodable {
+    var id: UUID
+    var body: String
+    var posted_at: Date
+    var author: ProfileRow
+
+    var comment: FeedComment { FeedComment(id: id, author: author.player, text: body, postedAt: posted_at) }
+}
+
+private struct LiveParams: Encodable {
+    var p_round: UUID
+    var p_live: Bool
+}
+
+private struct PositionRow: Codable {
+    var round_id: UUID
+    var player_id: UUID?
+    var hole: Int
+    var lat: Double
+    var lon: Double
+    var updated_at: Date
+}
+
+private struct VideoTokenParams: Encodable {
+    var round_id: UUID
+    var publish: Bool
+}
+
+private struct CheerInsert: Encodable {
+    var round_id: UUID
+    var body: String
+}
+
+private struct CheerRow: Decodable {
+    var id: UUID
+    var author_id: UUID
+    var body: String
+    var sent_at: Date
+}
+
+private struct LiveRoundRow: Decodable {
+    var id: UUID
+    var created_by: UUID?
+    var live: Bool
+    var finished_at: Date?
 }
 
 private struct CourseRow: Encodable {

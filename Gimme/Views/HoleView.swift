@@ -17,6 +17,9 @@ struct HoleView: View {
     @State private var recenters = 0
     @State private var target: Coordinate?
     @State private var showingScoring = false
+    @State private var filming = false
+    @State private var goingLive = false
+    @State private var watchingTrend: FeedPost?
 
     /// Measure from the golfer when they are on this hole, otherwise from the tee.
     private var origin: Coordinate {
@@ -44,6 +47,7 @@ struct HoleView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if app.course?.needsMapping == true { mappingBanner }
                         if let drop = holeDrops.first { dropBanner(drop) }
+                        if let clip = app.trendingHere, clip.hole == hole.number { trendingBanner(clip) }
                     }
                     Spacer()
                 }
@@ -73,6 +77,41 @@ struct HoleView: View {
             }
         }
         .onChange(of: hole) { target = nil }
+        .sheet(isPresented: $filming) { NewClipSheet() }
+        .sheet(isPresented: $goingLive) { GoLiveSheet() }
+        .fullScreenCover(item: $watchingTrend) { clip in
+            FeedPage(post: clip, isCurrent: true, watch: { _ in }, comment: { _ in })
+                .ignoresSafeArea()
+                .overlay(alignment: .topTrailing) {
+                    Button { watchingTrend = nil } label: {
+                        Image(systemName: "xmark").font(.system(size: 15, weight: .heavy))
+                            .frame(width: 38, height: 38)
+                            .background(.black.opacity(0.6), in: Circle())
+                            .foregroundStyle(.white)
+                    }
+                    .padding()
+                    .accessibilityLabel("Close")
+                }
+        }
+    }
+
+    /// The hottest clip from this hole, to watch and try to top.
+    private func trendingBanner(_ clip: FeedPost) -> some View {
+        Button { watchingTrend = clip } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "flame.fill").foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Trending on this hole").font(.gimme(13, .heavy))
+                    Text("\(clip.author.name): \(clip.title) · \(clip.likes.formatted(.number.notation(.compactName))) likes")
+                        .font(.gimme(11, .bold)).lineLimit(1)
+                }
+                Image(systemName: "play.circle.fill").font(.system(size: 20))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: 260, alignment: .leading)
+        }
     }
 
     // MARK: Map content
@@ -407,10 +446,24 @@ struct HoleView: View {
             }
             tile("list.number", "Scorecard", action: onScorecard)
             tile("person.2.fill", "Group", action: onChat)
+            tile("video.fill", "Clip") { filming = true }
+            tile("dot.radiowaves.left.and.right", app.isLive ? "Live" : "Go live", tint: app.isLive ? Color.gimmeBirdie : nil) {
+                goingLive = true
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            // Your own camera while streaming, so you can see what friends see.
+            if app.hostVideo.hasVideo {
+                LiveVideoView(video: app.hostVideo, mirrored: false)
+                    .frame(width: 64, height: 86)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.gimmeBirdie, lineWidth: 2))
+                    .offset(y: -96)
+            }
         }
     }
 
-    private func tile(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+    private func tile(_ icon: String, _ label: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 3) {
                 Image(systemName: icon).font(.system(size: 18, weight: .bold))
@@ -418,7 +471,7 @@ struct HoleView: View {
             }
             .foregroundStyle(.white)
             .frame(width: 64, height: 56)
-            .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(tint ?? .black.opacity(0.8), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .accessibilityLabel(label)
     }

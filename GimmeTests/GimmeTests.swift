@@ -309,3 +309,36 @@ final class TeeTimeTests: XCTestCase {
         XCTAssertFalse(TeeTime(courseId: "pack/ocean", courseName: "The Ocean Course", date: .now.addingTimeInterval(-5 * 3600)).isUpcoming)
     }
 }
+
+final class FeedTests: XCTestCase {
+    private let kate = Player(id: "kate", name: "Kate", avatar: "🐯", handicap: 5.6, homeCourse: "The Ocean Course")
+    private let me = Player(id: "me", name: "Chris", avatar: "🏌️")
+
+    private func clip(_ author: Player, hole: Int, likes: Int, daysAgo: Double, course: String = "pack/ocean") -> FeedPost {
+        FeedPost(author: author, kind: .clip, title: "Clip", detail: "", postedAt: .now.addingTimeInterval(-daysAgo * 86_400),
+                 likes: likes, audience: .everyone, courseId: course, courseName: "The Ocean Course", hole: hole)
+    }
+
+    func testTrendingPicksTheHottestClipOnThisHoleFromSomeoneElse() {
+        let hot = clip(kate, hole: 17, likes: 400, daysAgo: 5)
+        let posts = [clip(kate, hole: 17, likes: 3, daysAgo: 1), hot,
+                     clip(me, hole: 17, likes: 9_000, daysAgo: 1),          // mine
+                     clip(kate, hole: 18, likes: 9_000, daysAgo: 1),        // other hole
+                     clip(kate, hole: 17, likes: 9_000, daysAgo: 1, course: "pack/turtle"),
+                     clip(kate, hole: 17, likes: 9_000, daysAgo: 90)]       // too old
+        XCTAssertEqual(Trending.clip(on: 17, courseId: "pack/ocean", in: posts, excluding: "me")?.id, hot.id)
+        XCTAssertNil(Trending.clip(on: 5, courseId: "pack/ocean", in: posts, excluding: "me"))
+    }
+
+    func testForYouPinsLiveRoundsThenRanksByTrend() {
+        let live = FeedPost(author: kate, kind: .live, title: "Live", detail: "")
+        let big = clip(kate, hole: 1, likes: 500, daysAgo: 2)
+        let small = clip(kate, hole: 2, likes: 5, daysAgo: 0)
+        XCTAssertEqual(Trending.forYou([small, big, live]).map(\.id), [live.id, big.id, small.id])
+    }
+
+    func testHeadlineReadsLikeAJobTitle() {
+        XCTAssertEqual(kate.headline, "5.6 HCP · The Ocean Course")
+        XCTAssertEqual(me.headline, "")
+    }
+}
