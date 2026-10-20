@@ -155,7 +155,7 @@ struct HoleView: View {
                         .shadow(radius: 2)
                 }
             }
-            if let credit = ImageryProvider.current.attribution {
+            if let credit = BundledImagery.covers(hole.tee) ? BundledImagery.credit : ImageryProvider.current.attribution {
                 VStack {
                     Spacer()
                     HStack { Text(credit).font(.system(size: 9)).foregroundStyle(.white.opacity(0.7)); Spacer() }

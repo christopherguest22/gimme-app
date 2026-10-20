@@ -35,6 +35,8 @@ Tabs along the bottom: **Home, Community, Play, Prizes, Me.**
 
 No provider shows live photos: all of them are months to a few years old, and that is true for 18Birdies too. Compare a few of your home courses on each provider and keep the sharpest.
 
+**Kiawah Island photos built into the app.** For the launch courses the app carries its own aerial photos (`Gimme/Resources/kiawah-imagery.mbtiles`, 28 MB). NOAA's National Geodetic Survey flew the coast in 2026; the photos show about 30 cm per pixel and are public domain. They cover every golf hole on the island, draw on top of whichever provider is set above, and work with no phone signal on the course. To rebuild them, or make a pack for another area, see `tools/imagery/` (`prepare_area.py`, then `make_tiles.py`). `design/ocean-course-hole-18.jpg` is hole 18 of the Ocean Course cut from these photos.
+
 **Hole data.** Each course is put together from three free sources:
 
 - **Hole shapes** (tees, greens, bunkers, water) come from OpenStreetMap.

@@ -1,5 +1,6 @@
 import MapKit
 import Observation
+import SQLite3
 import SwiftUI
 
 /// Where the satellite photos come from. Set `SatelliteProvider` in Info.plist (project.yml).
@@ -33,6 +34,9 @@ enum ImageryProvider: String {
         case .esri: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         }
     }
+
+    /// Mapbox serves 512 px tiles (the @2x template); Esri serves 256 px.
+    var tileSize: CGFloat { self == .esri ? 256 : 512 }
 
     var attribution: String? {
         switch self {
@@ -104,10 +108,14 @@ struct SatelliteMapView: UIViewRepresentable {
         map.isRotateEnabled = true
         if let template = ImageryProvider.current.tileTemplate {
             let tiles = MKTileOverlay(urlTemplate: template)
-            tiles.tileSize = CGSize(width: 512, height: 512)
+            tiles.tileSize = CGSize(width: ImageryProvider.current.tileSize, height: ImageryProvider.current.tileSize)
             tiles.maximumZ = 21
             tiles.canReplaceMapContent = true
             map.addOverlay(tiles, level: .aboveRoads)
+        }
+        // Sharper, newer photos for the launch-area courses, drawn on top where they exist.
+        if let bundled = BundledImagery.overlay {
+            map.addOverlay(bundled, level: .aboveRoads)
         }
         map.addGestureRecognizer(UITapGestureRecognizer(target: context.coordinator,
                                                         action: #selector(Coordinator.tapped(_:))))
@@ -191,4 +199,84 @@ private final class StyledPolyline: MKPolyline {
 
 private final class StyledCircle: MKCircle {
     var color: UIColor = .systemYellow
+}
+
+/// Aerial photos that ship inside the app for the launch-area courses (Kiawah Island), cut into
+/// map tiles in `Resources/kiawah-imagery.mbtiles`. They come from NOAA's 2026 coastal survey:
+/// about 30 cm per pixel, flown in 2026, public domain. They work with no signal on the course.
+/// Built by `tools/imagery/make_tiles.py`.
+enum BundledImagery {
+    static let overlay: MBTilesOverlay? = Bundle.main.url(forResource: "kiawah-imagery", withExtension: "mbtiles")
+        .flatMap { MBTilesOverlay(url: $0) }
+
+    static let credit = "Imagery: NOAA NGS 2026"
+
+    static func covers(_ point: Coordinate) -> Bool {
+        overlay?.boundingMapRect.contains(MKMapPoint(point.clCoordinate)) ?? false
+    }
+}
+
+/// Serves map tiles from an MBTiles (SQLite) file. Missing tiles are left empty so the
+/// imagery underneath shows through.
+final class MBTilesOverlay: MKTileOverlay {
+    private var db: OpaquePointer?
+    private let queue = DispatchQueue(label: "gimme.mbtiles")
+    private let bounds: MKMapRect
+
+    init?(url: URL) {
+        var handle: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return nil }
+        var rect = MKMapRect.world
+        var minZoom = 0, maxZoom = 19
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(handle, "SELECT name, value FROM metadata", -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let name = String(cString: sqlite3_column_text(statement, 0))
+                let value = String(cString: sqlite3_column_text(statement, 1))
+                switch name {
+                case "minzoom": minZoom = Int(value) ?? minZoom
+                case "maxzoom": maxZoom = Int(value) ?? maxZoom
+                case "bounds":
+                    let b = value.split(separator: ",").compactMap { Double($0) }
+                    if b.count == 4 {
+                        let sw = MKMapPoint(CLLocationCoordinate2D(latitude: b[1], longitude: b[0]))
+                        let ne = MKMapPoint(CLLocationCoordinate2D(latitude: b[3], longitude: b[2]))
+                        rect = MKMapRect(x: sw.x, y: ne.y, width: ne.x - sw.x, height: sw.y - ne.y)
+                    }
+                default: break
+                }
+            }
+        }
+        sqlite3_finalize(statement)
+        db = handle
+        bounds = rect
+        super.init(urlTemplate: nil)
+        self.minimumZ = minZoom
+        self.maximumZ = maxZoom
+        self.tileSize = CGSize(width: 256, height: 256)
+        self.canReplaceMapContent = false
+    }
+
+    deinit { sqlite3_close(db) }
+
+    override var boundingMapRect: MKMapRect { bounds }
+
+    override func loadTile(at path: MKTileOverlayPath, result: @escaping (Data?, Error?) -> Void) {
+        queue.async { [weak self] in
+            guard let self else { return result(nil, nil) }
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            // MBTiles rows count from the bottom (TMS), map tiles from the top.
+            let row = (1 << path.z) - 1 - path.y
+            let sql = "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?"
+            guard sqlite3_prepare_v2(self.db, sql, -1, &statement, nil) == SQLITE_OK else { return result(nil, nil) }
+            sqlite3_bind_int(statement, 1, Int32(path.z))
+            sqlite3_bind_int(statement, 2, Int32(path.x))
+            sqlite3_bind_int(statement, 3, Int32(row))
+            guard sqlite3_step(statement) == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else {
+                return result(nil, nil)
+            }
+            result(Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0))), nil)
+        }
+    }
 }
