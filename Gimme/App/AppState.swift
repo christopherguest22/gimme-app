@@ -166,11 +166,17 @@ final class AppState {
     }
 
     /// The launch-area showcase course (the Ocean Course), loaded for the Home screen preview.
-    var featuredCourse: Course?
+    /// Hole maps for courses shown on Home before a round starts, by course id.
+    var previewCourses: [String: Course] = [:]
 
-    func loadFeatured() async {
-        guard featuredCourse == nil, let pack = CoursePack.featured else { return }
-        featuredCourse = try? await prepareCourse(pack.summary)
+    func loadPreview(_ pack: PackCourse) async {
+        guard previewCourses[pack.id] == nil else { return }
+        if let course = try? await prepareCourse(pack.summary) { previewCourses[pack.id] = course }
+    }
+
+    /// The golfer's next booked round, kept on this phone.
+    var teeTime: TeeTime? = TeeTime.saved {
+        didSet { TeeTime.save(teeTime) }
     }
 
     /// Saves where this hole's tee or green really is (from the golfer's GPS) and moves it on the map.
@@ -205,6 +211,7 @@ final class AppState {
             var new = Round(course: course, players: [me] + group)
             new.stakes = stakes?.isOn == true ? stakes : nil
             let started = try await backend.startRound(new, course: course)
+            if teeTime?.courseId == course.id { teeTime = nil }
             self.course = course
             round = started
             currentHole = course.holes.map(\.number).min() ?? 1

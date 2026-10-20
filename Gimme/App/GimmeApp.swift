@@ -51,6 +51,8 @@ struct RootView: View {
     @State private var tab = GimmeTab.home
     @State private var showingRound = false
     @State private var choosingCourse = false
+    /// The course the golfer tapped on Home, offered first when picking a course.
+    @State private var suggested: CourseSummary?
 
     var body: some View {
         Group {
@@ -79,7 +81,7 @@ struct RootView: View {
     private var tabs: some View {
         Group {
             switch tab {
-            case .home: HomeView(startRound: openPlay)
+            case .home: HomeView(play: openPlay)
             case .community: CommunityView()
             case .prizes: WalletView()
             case .me: ProfileView()
@@ -91,10 +93,10 @@ struct RootView: View {
             GimmeTabBar(selection: $tab,
                         roundActive: app.round != nil,
                         prizeBadge: app.wallet.filter { !$0.redeemed }.count,
-                        onPlay: openPlay)
+                        onPlay: { openPlay() })
         }
         .sheet(isPresented: $choosingCourse) {
-            StartRoundView {
+            StartRoundView(suggested: suggested) {
                 // Let the sheet finish closing before the round covers the screen.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showingRound = true }
             }
@@ -104,8 +106,14 @@ struct RootView: View {
         }
     }
 
-    private func openPlay() {
-        if app.round != nil { showingRound = true } else { choosingCourse = true }
+    /// Reopens the round in progress, or starts one, with `course` offered first.
+    private func openPlay(_ course: CourseSummary? = nil) {
+        if app.round != nil {
+            showingRound = true
+        } else {
+            suggested = course
+            choosingCourse = true
+        }
     }
 }
 

@@ -301,3 +301,11 @@ final class SettlementTests: XCTestCase {
         XCTAssertTrue(venmo.hasPrefix("https://venmo.com/chris-g?txn=pay&amount=20.00"))
     }
 }
+
+final class TeeTimeTests: XCTestCase {
+    func testUpcomingUntilFourHoursAfterTeeOff() {
+        XCTAssertTrue(TeeTime(courseId: "pack/ocean", courseName: "The Ocean Course", date: .now.addingTimeInterval(86_400)).isUpcoming)
+        XCTAssertTrue(TeeTime(courseId: "pack/ocean", courseName: "The Ocean Course", date: .now.addingTimeInterval(-3 * 3600)).isUpcoming)
+        XCTAssertFalse(TeeTime(courseId: "pack/ocean", courseName: "The Ocean Course", date: .now.addingTimeInterval(-5 * 3600)).isUpcoming)
+    }
+}

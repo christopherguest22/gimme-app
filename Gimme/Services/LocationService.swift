@@ -28,6 +28,12 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.requestWhenInUseAuthorization()
     }
 
+    /// One fix outside a round, so Home can tell which course the golfer is standing on.
+    func refresh() {
+        guard !isSimulating, authorization == .authorizedWhenInUse || authorization == .authorizedAlways else { return }
+        manager.requestLocation()
+    }
+
     /// Full-accuracy updates during a round, kept running with the phone in a pocket so drops
     /// still unlock (needs the "location" background mode). Stopped afterwards to save battery.
     func startRound() {

@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// Home: a play card up top, your numbers, friends on the course, drops and recent rounds.
+/// Home: your course card up top (the round you're playing, the course you're standing on,
+/// your next tee time, or the featured course), your numbers, friends on the course, drops
+/// and recent rounds.
 struct HomeView: View {
     @Environment(AppState.self) private var app
-    var startRound: () -> Void
+    /// Opens Play: the live round's GPS, or a new round with this course offered first.
+    var play: (CourseSummary?) -> Void
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    playCard
-                    if app.round == nil, let pack = CoursePack.featured {
-                        FeaturedCourseCard(pack: pack, onPlay: startRound)
-                    }
+                    if app.round == nil { greeting }
+                    CourseSpotlightCard(play: play)
                     statsStrip
 
                     let playing = app.friends.filter { $0.playingNow != nil }
@@ -93,28 +94,14 @@ struct HomeView: View {
         }
     }
 
-    private var playCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let round = app.round {
-                Text("ROUND IN PROGRESS").font(.gimme(12, .heavy)).tracking(0.8).opacity(0.8)
-                Text(round.courseName).font(.gimme(24, .heavy))
-                Text("Hole \(app.currentHole) · \(Scoring.formatToPar(round.toPar(app.myId))) thru \(round.holesPlayed(app.myId))")
-                    .font(.gimme(15, .bold)).opacity(0.9)
-                Button("Resume round", action: startRound).buttonStyle(.gimmePrize)
-            } else {
-                Text("Hey \(app.me?.name ?? "golfer")").font(.gimme(24, .heavy))
-                Text("GPS on every hole, a live card with your crew, and prizes waiting on the course.")
-                    .font(.gimme(15)).opacity(0.9)
-                Button(action: startRound) {
-                    Label("Play golf", systemImage: "flag.fill")
-                }
-                .buttonStyle(.gimmePrize)
-            }
+    private var greeting: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Hey \(app.me?.name ?? "golfer")").font(.gimme(24, .heavy))
+            Text("GPS on every hole, a live card with your crew, and prizes waiting on the course.")
+                .font(.gimme(14)).foregroundStyle(.secondary)
         }
         .foregroundStyle(.white)
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LinearGradient.gimmeFairway, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.top, 4)
     }
 
     private var statsStrip: some View {
@@ -189,6 +176,8 @@ struct StartRoundView: View {
     @Environment(AppState.self) private var app
     @Environment(LocationService.self) private var location
     @Environment(\.dismiss) private var dismiss
+    /// The course the golfer tapped on Home, shown first.
+    var suggested: CourseSummary? = nil
     var onStart: () -> Void
 
     @State private var nearby: [CourseSummary] = []
@@ -224,6 +213,19 @@ struct StartRoundView: View {
 
                 if !group.isEmpty {
                     StakesEditor(stakes: $stakes)
+                }
+
+                if let suggested {
+                    Section("Playing today") {
+                        Button { load(suggested) } label: {
+                            HStack {
+                                Label(suggested.name, systemImage: "flag.fill").font(.headline)
+                                Spacer()
+                                Text("Tee off").font(.gimme(14, .heavy)).foregroundStyle(Color.gimmeLime)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
                 }
 
                 Section {
@@ -352,64 +354,254 @@ struct StartRoundView: View {
 }
 
 /// Home showcase for the launch course: hole 18 of the Ocean Course on satellite, with its numbers.
-struct FeaturedCourseCard: View {
+/// Home's course card, on a satellite photo of the hole. Shows, first that applies: the round
+/// in progress (on the hole you're playing), the course you're standing on, your next tee time,
+/// or the featured course. The photo and the button both open Play.
+struct CourseSpotlightCard: View {
     @Environment(AppState.self) private var app
-    let pack: PackCourse
-    var onPlay: () -> Void
-    var holeNumber = 18
+    @Environment(LocationService.self) private var location
+    var play: (CourseSummary?) -> Void
 
     @State private var projector = MapProjector()
+    @State private var editingTeeTime = false
 
-    private var packHole: PackCourse.PackHole? { pack.holes.first { $0.number == holeNumber } }
+    enum Kind { case live, here, teeTime, featured }
+
+    /// Within this distance of a course's center, the golfer counts as being at that course.
+    private static let atCourseMeters = 1_500.0
+
+    private var kind: Kind {
+        if app.round != nil { return .live }
+        if herePack != nil { return .here }
+        if teeTimePack != nil { return .teeTime }
+        return .featured
+    }
+
+    private var herePack: PackCourse? {
+        guard let point = location.coordinate else { return nil }
+        return CoursePack.courses
+            .map { ($0, Geo.meters(point, $0.center)) }
+            .filter { $0.1 < Self.atCourseMeters }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    private var teeTimePack: PackCourse? {
+        guard let teeTime = app.teeTime, teeTime.isUpcoming else { return nil }
+        return CoursePack.course(id: teeTime.courseId)
+    }
+
+    private var pack: PackCourse? {
+        switch kind {
+        case .live: app.course.flatMap { CoursePack.course(id: $0.id) }
+        case .here: herePack
+        case .teeTime: teeTimePack
+        case .featured: CoursePack.featured
+        }
+    }
+
+    private var course: Course? {
+        if kind == .live { return app.course }
+        return pack.flatMap { app.previewCourses[$0.id] }
+    }
+
+    /// The hole on the photo: the one being played, the one you're standing nearest, the
+    /// first tee before a booked round, or the featured finishing hole.
+    private var holeNumber: Int {
+        switch kind {
+        case .live: return app.currentHole
+        case .here:
+            guard let point = location.coordinate, let course else { return 1 }
+            return course.holes.min {
+                min(Geo.meters(point, $0.tee), Geo.meters(point, $0.greenCenter))
+                    < min(Geo.meters(point, $1.tee), Geo.meters(point, $1.greenCenter))
+            }?.number ?? 1
+        case .teeTime: return course?.holes.map(\.number).min() ?? 1
+        case .featured: return 18
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                if let hole = app.featuredCourse?.hole(holeNumber) {
-                    let length = Geo.meters(hole.tee, hole.greenCenter)
-                    SatelliteMapView(frame: .init(center: Geo.offset(hole.tee, meters: length * 0.5, bearing: hole.bearing),
-                                                  distance: max(length * 2.2, 420),
-                                                  heading: hole.bearing),
-                                     lines: [MapLine(points: [hole.tee, hole.greenCenter], color: UIColor(Color.gimmeGold), width: 3)],
-                                     projector: projector)
-                        .allowsHitTesting(false)
-                } else {
-                    Color.gimmeSurfaceRaised
-                        .overlay { ProgressView().tint(.white) }
-                }
-                HStack(spacing: 6) {
-                    Text("#\(holeNumber)").font(.gimme(22, .heavy))
-                    if let packHole {
-                        Text("Par \(packHole.par)").font(.gimme(13, .bold))
-                        if let tee = pack.longestTee, let yards = packHole.yardages[tee.name] {
-                            Text("\(yards) yds").font(.gimme(13, .bold))
-                        }
-                        Text("HCP \(packHole.handicap)").font(.gimme(13, .bold))
-                    }
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .padding(10)
-            }
-            .frame(height: 210)
-            .clipped()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("FEATURED COURSE").font(.gimme(11, .heavy)).tracking(0.8).foregroundStyle(Color.gimmeGold)
-                Text(pack.name).font(.gimme(22, .heavy))
-                if let tee = pack.longestTee {
-                    Text("Kiawah Island · Par \(tee.par) · \(tee.yardage.formatted()) yds · \(String(format: "%.1f", tee.rating))/\(tee.slope)")
-                        .font(.gimme(13, .bold)).foregroundStyle(.secondary)
-                }
-                Button(action: onPlay) { Label("Play a round", systemImage: "flag.fill") }
-                    .buttonStyle(.gimme)
-            }
-            .padding(16)
+            photo
+                .contentShape(Rectangle())
+                .onTapGesture(perform: primaryAction)
+            details
         }
         .foregroundStyle(.white)
         .background(Color.gimmeSurface)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .task { await app.loadFeatured() }
+        .overlay {
+            if kind == .live {
+                RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.gimmeLime, lineWidth: 2)
+            }
+        }
+        .task(id: pack?.id) {
+            if kind != .live, let pack { await app.loadPreview(pack) }
+        }
+        .onAppear { location.refresh() }
+        .sheet(isPresented: $editingTeeTime) { TeeTimeSheet() }
+    }
+
+    private var photo: some View {
+        ZStack(alignment: .top) {
+            if let hole = course?.hole(holeNumber) {
+                let length = Geo.meters(hole.tee, hole.greenCenter)
+                let drops = kind == .live ? app.drops.filter { $0.holeNumber == hole.number } : []
+                SatelliteMapView(frame: .init(center: Geo.offset(hole.tee, meters: length * 0.5, bearing: hole.bearing),
+                                              distance: max(length * 2.2, 420),
+                                              heading: hole.bearing),
+                                 lines: [MapLine(points: [hole.tee, hole.greenCenter], color: UIColor(Color.gimmeGold), width: 3)],
+                                 zones: drops.map { MapZone(center: $0.center, radiusMeters: $0.radiusMeters, color: UIColor(Color.gimmeGold)) },
+                                 projector: projector)
+                    .allowsHitTesting(false)
+            } else {
+                Color.gimmeSurfaceRaised.overlay { ProgressView().tint(.white) }
+            }
+            HStack(alignment: .top) {
+                holeChip
+                Spacer()
+                badge
+            }
+            .padding(10)
+        }
+        .frame(height: 220)
+        .clipped()
+    }
+
+    private var holeChip: some View {
+        HStack(spacing: 6) {
+            Text("#\(holeNumber)").font(.gimme(22, .heavy))
+            if let hole = course?.hole(holeNumber) {
+                Text("Par \(hole.par)").font(.gimme(13, .bold))
+                if let yards = hole.yardage(kind == .live ? app.selectedTee : pack?.longestTee?.name) {
+                    Text("\(yards) yds").font(.gimme(13, .bold))
+                }
+                if let handicap = hole.handicap { Text("HCP \(handicap)").font(.gimme(13, .bold)) }
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder private var badge: some View {
+        switch kind {
+        case .live:
+            HStack(spacing: 5) {
+                Circle().fill(Color.gimmeBirdie).frame(width: 8, height: 8)
+                Text("LIVE").font(.gimme(12, .heavy))
+            }
+            .padding(.horizontal, 9).padding(.vertical, 6)
+            .background(.black.opacity(0.7), in: Capsule())
+        case .here:
+            Label("You're here", systemImage: "location.fill").font(.gimme(12, .heavy))
+                .padding(.horizontal, 9).padding(.vertical, 6)
+                .background(Color.gimmeGreen, in: Capsule())
+        case .teeTime, .featured:
+            EmptyView()
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(kicker).font(.gimme(11, .heavy)).tracking(0.8)
+                .foregroundStyle(kind == .live ? Color.gimmeLime : Color.gimmeGold)
+            Text(kind == .live ? app.round?.courseName ?? "" : pack?.name ?? "").font(.gimme(22, .heavy))
+            Text(detail).font(.gimme(13, .bold)).foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Button(action: primaryAction) {
+                    Label(kind == .live ? "Open GPS" : "Play a round",
+                          systemImage: kind == .live ? "location.north.line.fill" : "flag.fill")
+                }
+                .buttonStyle(GimmeButtonStyle(prize: kind == .live))
+                if kind != .live {
+                    Button { editingTeeTime = true } label: {
+                        Image(systemName: "calendar.badge.plus").font(.system(size: 18, weight: .bold))
+                            .frame(width: 50, height: 50)
+                            .background(Color.gimmeSurfaceRaised, in: Circle())
+                    }
+                    .accessibilityLabel(app.teeTime == nil ? "Add a tee time" : "Change tee time")
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    private var kicker: String {
+        switch kind {
+        case .live: "ROUND IN PROGRESS"
+        case .here: "YOU'RE AT THE COURSE"
+        case .teeTime: "NEXT TEE TIME"
+        case .featured: "FEATURED COURSE"
+        }
+    }
+
+    private var detail: String {
+        switch kind {
+        case .live:
+            guard let round = app.round else { return "" }
+            let others = round.players.filter { $0.id != app.myId }.map(\.name)
+            var text = "Hole \(app.currentHole) · \(Scoring.formatToPar(round.toPar(app.myId))) thru \(round.holesPlayed(app.myId))"
+            if !others.isEmpty { text += " · with \(others.formatted())" }
+            return text
+        case .teeTime:
+            guard let teeTime = app.teeTime else { return "" }
+            return teeTime.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                + (pack?.longestTee.map { " · Par \($0.par) · \($0.yardage.formatted()) yds" } ?? "")
+        case .here, .featured:
+            guard let tee = pack?.longestTee else { return "" }
+            return "\(CoursePack.area) · Par \(tee.par) · \(tee.yardage.formatted()) yds · \(String(format: "%.1f", tee.rating))/\(tee.slope)"
+        }
+    }
+
+    private func primaryAction() {
+        play(kind == .live ? nil : pack?.summary)
+    }
+}
+
+/// Book your next round so Home shows that course ahead of time.
+struct TeeTimeSheet: View {
+    @Environment(AppState.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var courseId = CoursePack.featured?.id ?? ""
+    @State private var date = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0,
+                                                    of: .now.addingTimeInterval(86_400)) ?? .now
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("Course", selection: $courseId) {
+                    ForEach(CoursePack.courses) { Text($0.name).tag($0.id) }
+                }
+                DatePicker("Tee time", selection: $date, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                if app.teeTime != nil {
+                    Section {
+                        Button("Remove tee time", role: .destructive) {
+                            app.teeTime = nil
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Tee time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if let pack = CoursePack.course(id: courseId) {
+                            app.teeTime = TeeTime(courseId: pack.id, courseName: pack.name, date: date)
+                        }
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                if let teeTime = app.teeTime {
+                    courseId = teeTime.courseId
+                    date = max(teeTime.date, .now)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
