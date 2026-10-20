@@ -411,7 +411,7 @@ final class SupabaseBackend: GimmeBackend {
     // MARK: Drops
 
     func drops(for course: Course) async throws -> [Drop] {
-        let rows: [DropRow] = try await client.from("drops").select().eq("course_id", value: course.id).execute().value
+        let rows: [DropRecord] = try await client.from("drops").select().eq("course_id", value: course.id).execute().value
         return rows.map(\.drop)
     }
 
@@ -673,7 +673,7 @@ private struct PastRoundRow: Decodable {
     var paid: [String]?
 }
 
-private struct DropRow: Decodable {
+private struct DropRecord: Decodable {
     var id: UUID
     var brand: String
     var prize: String
@@ -702,7 +702,7 @@ private struct ClaimRow: Decodable {
     var code: String
     var claimed_at: Date
     var redeemed_at: Date?
-    var drop: DropRow
+    var drop: DropRecord
 }
 
 private struct VisitParams: Encodable {
