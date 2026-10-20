@@ -16,17 +16,18 @@ struct OnboardingView: View {
     private let slides: [(icon: String, title: String, text: String)] = [
         ("location.north.circle.fill", "Every yard, every hole", "GPS distances to the front, middle and back of the green, hazards and carries."),
         ("person.3.fill", "Play with your crew", "A live scorecard, skins and Nassau, and a chat for your group while you play."),
-        ("gift.fill", "Win gear on the course", "Golf brands drop prizes on holes. Reach the green and it's yours."),
+        ("gift.fill", "Win gear on the course", "Golf brands drop prizes on holes. Sink it and it's yours."),
     ]
 
     var body: some View {
         ZStack {
-            LinearGradient.gimmeFairway.ignoresSafeArea()
+            background
             VStack(spacing: 24) {
                 Text("Gimme")
                     .font(.gimme(44, .heavy))
                     .foregroundStyle(.white)
-                    .padding(.top, 40)
+                    .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+                    .padding(.top, 16)
 
                 switch step {
                 case .slides: slidesView
@@ -40,20 +41,46 @@ struct OnboardingView: View {
         .animation(.easeInOut, value: step)
     }
 
+    /// The putt-drop photo, darkened at the top and bottom so the text reads, and all over once
+    /// the golfer is typing.
+    private var background: some View {
+        GeometryReader { geo in
+            Image("WelcomeHero")
+                .resizable()
+                .scaledToFill()
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .overlay {
+                    LinearGradient(stops: [
+                        .init(color: .shade.opacity(0.82), location: 0),
+                        .init(color: .shade.opacity(0.55), location: 0.22),
+                        .init(color: .clear, location: 0.38),
+                        .init(color: .clear, location: 0.7),
+                        .init(color: .shade.opacity(0.7), location: 0.84),
+                        .init(color: .shade.opacity(0.9), location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                }
+                .overlay { Color.shade.opacity(step == .slides ? 0 : 0.55) }
+        }
+        .ignoresSafeArea()
+        .accessibilityLabel("A golfer celebrates as his putt drops into the hole")
+    }
+
     private var slidesView: some View {
         VStack(spacing: 24) {
             TabView(selection: $page) {
                 ForEach(slides.indices, id: \.self) { i in
-                    VStack(spacing: 18) {
-                        Image(systemName: slides[i].icon)
-                            .font(.system(size: 84))
-                            .foregroundStyle(i == 2 ? Color.gimmeGold : .white)
-                        Text(slides[i].title).font(.gimme(28, .bold)).foregroundStyle(.white)
+                    // The photo is the hero, so the slide text sits up top, under the logo.
+                    VStack(spacing: 6) {
+                        Text(slides[i].title).font(.gimme(25, .heavy)).foregroundStyle(.white)
                         Text(slides[i].text)
-                            .font(.gimme(17))
-                            .foregroundStyle(.white.opacity(0.85))
+                            .font(.gimme(15, .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
                             .multilineTextAlignment(.center)
+                        Spacer()
                     }
+                    .shadow(color: .black.opacity(0.45), radius: 6, y: 1)
+                    .padding(.top, -12)
                     .tag(i)
                 }
             }
@@ -144,6 +171,11 @@ struct OnboardingView: View {
             Spacer()
         }
     }
+}
+
+private extension Color {
+    /// Deep green-black used to darken the welcome photo.
+    static let shade = Color(red: 0.02, green: 0.09, blue: 0.05)
 }
 
 struct AvatarPicker: View {
