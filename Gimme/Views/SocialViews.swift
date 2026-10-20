@@ -228,6 +228,16 @@ struct PrizeCard: View {
             }
             .padding(10)
             .background(.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
+            if let claim = prize.drop.claimURL {
+                Link(destination: claim) {
+                    Label("Claim at \(prize.drop.brand)", systemImage: "arrow.up.right")
+                        .font(.gimme(15, .heavy))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(.black, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+            }
             Text("Won on hole \(prize.drop.holeNumber) · expires \(prize.drop.expires.formatted(date: .abbreviated, time: .omitted))")
                 .font(.caption).foregroundStyle(.black.opacity(0.7))
         }
@@ -237,50 +247,182 @@ struct PrizeCard: View {
     }
 }
 
-/// The unlock moment.
+/// The unlock moment, laid out like a brand ad: the brand's line, the product, a button to claim
+/// it on the brand's site, and the green it was won on with the drop marked over the hole.
 struct DropFoundView: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     let prize: WonPrize
     @State private var shared = false
     @State private var appeared = false
+    @State private var projector = MapProjector()
+
+    private static let cream = Color(red: 0.96, green: 0.94, blue: 0.89)
+    private static let navy = Color(red: 0.09, green: 0.14, blue: 0.25)
+    private static let brandGreen = Color(red: 0.12, green: 0.36, blue: 0.23)
+
+    private var drop: Drop { prize.drop }
 
     var body: some View {
-        ZStack {
-            LinearGradient.gimmeFairway.ignoresSafeArea()
-            Confetti(active: appeared)
-            VStack(spacing: 18) {
-                Spacer()
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 96))
-                    .foregroundStyle(LinearGradient.gimmePrize)
-                    .scaleEffect(appeared ? 1 : 0.3)
-                    .rotationEffect(.degrees(appeared ? 0 : -30))
-                Text("You found a drop!").font(.gimme(34, .heavy)).foregroundStyle(.white)
-                Text(prize.drop.brand).font(.title3).foregroundStyle(.white.opacity(0.8))
-                Text(prize.drop.prize).font(.gimme(26, .bold)).foregroundStyle(Color.gimmeGold).multilineTextAlignment(.center)
-                Text(prize.drop.detail).foregroundStyle(.white).multilineTextAlignment(.center)
-                Text("Only \(prize.drop.remaining) left").font(.caption.bold()).foregroundStyle(.white.opacity(0.8))
-                Spacer()
-                Button {
-                    Task {
-                        await app.share(prize)
-                        shared = true
+        ZStack(alignment: .top) {
+            Self.cream.ignoresSafeArea()
+            VStack(spacing: 0) {
+                header
+                ScrollView {
+                    VStack(spacing: 14) {
+                        headline
+                        product
+                        offer
                     }
-                } label: {
-                    Text(shared ? "Shared with your crew" : "Share with your crew")
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 16)
                 }
-                .buttonStyle(.gimme)
-                .disabled(shared)
-                Button("Added to your wallet") { dismiss() }
-                    .buttonStyle(.gimmePrize)
+                greenMap
             }
-            .padding(24)
+            Confetti(active: appeared)
         }
+        .foregroundStyle(Self.navy)
         .sensoryFeedback(.success, trigger: appeared)
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.5)) { appeared = true }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { appeared = true }
         }
+    }
+
+    private var header: some View {
+        HStack {
+            Text("GIMME DROP · HOLE \(drop.holeNumber)")
+                .font(.gimme(12, .heavy)).tracking(1)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Self.brandGreen, in: Capsule())
+            Spacer()
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
+                    .frame(width: 32, height: 32)
+                    .background(Self.navy.opacity(0.08), in: Circle())
+            }
+            .accessibilityLabel("Close")
+        }
+        .padding(.horizontal, 18).padding(.top, 8)
+    }
+
+    private var headline: some View {
+        Text(drop.headline ?? "You found a drop!")
+            .font(.gimme(30, .heavy))
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 10)
+    }
+
+    private var product: some View {
+        ZStack {
+            Circle().fill(Self.brandGreen).frame(width: 200, height: 200)
+            if let url = drop.imageURL {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ProgressView().tint(.white)
+                }
+                .frame(width: 184, height: 184)
+                .clipShape(Circle())
+            } else {
+                Image(systemName: "gift.fill").font(.system(size: 80)).foregroundStyle(Color.gimmeGold)
+            }
+        }
+        .scaleEffect(appeared ? 1 : 0.4)
+        .rotationEffect(.degrees(appeared ? 0 : -20))
+        .accessibilityLabel(drop.prize)
+    }
+
+    private var offer: some View {
+        VStack(spacing: 4) {
+            Text(drop.brand.uppercased()).font(.gimme(12, .heavy)).tracking(1.2).foregroundStyle(.secondary)
+            Text(drop.prize).font(.gimme(24, .heavy)).multilineTextAlignment(.center)
+            Text(drop.detail).font(.gimme(15, .semibold)).multilineTextAlignment(.center).opacity(0.8)
+            if let claim = drop.claimURL {
+                Button { openURL(claim) } label: {
+                    Label("Claim at \(drop.brand)", systemImage: "arrow.up.right")
+                        .labelStyle(TrailingIconLabel())
+                        .font(.gimme(17, .heavy))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(Self.navy, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+                .padding(.top, 12)
+            }
+            Text("Code \(prize.code) is saved in your Prizes · \(drop.remaining) left")
+                .font(.gimme(12, .semibold)).foregroundStyle(.secondary)
+                .padding(.top, 6)
+            Button(shared ? "Shared with your crew" : "Share with your crew") {
+                Task {
+                    await app.share(prize)
+                    shared = true
+                }
+            }
+            .font(.gimme(14, .bold))
+            .tint(Self.brandGreen)
+            .disabled(shared)
+            .padding(.top, 2)
+        }
+    }
+
+    /// The green the drop was won on, photo from above, with the drop marked over the hole.
+    private var greenMap: some View {
+        let heading = app.course?.id == drop.courseId ? app.course?.hole(drop.holeNumber)?.bearing ?? 0 : 0
+        return SatelliteMapView(frame: .init(center: drop.center, distance: 160, heading: heading),
+                                projector: projector)
+            .allowsHitTesting(false)
+            .overlay {
+                GeometryReader { _ in
+                    if let point = projector.point(drop.center) {
+                        DropPin()
+                            .position(x: point.x, y: point.y - 34)
+                    }
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                Text("Hole \(drop.holeNumber) green\(app.course?.id == drop.courseId ? " · \(app.course?.name ?? "")" : "")")
+                    .font(.gimme(13, .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(12)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if BundledImagery.covers(drop.center) {
+                    Text(BundledImagery.credit).font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8)).padding(12)
+                }
+            }
+            .frame(height: 220)
+            .ignoresSafeArea(edges: .bottom)
+    }
+}
+
+/// Gold map pin with a gift on it; the point sits on the hole.
+private struct DropPin: View {
+    var body: some View {
+        ZStack {
+            Image(systemName: "drop.fill")
+                .resizable().scaledToFit()
+                .frame(width: 52, height: 68)
+                .rotationEffect(.degrees(180))
+                .foregroundStyle(Color.gimmeGold)
+                .shadow(color: .black.opacity(0.45), radius: 4, y: 3)
+            Image(systemName: "gift.fill")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color(red: 0.09, green: 0.14, blue: 0.25))
+                .offset(y: -6)
+        }
+        .accessibilityLabel("Drop on the hole")
+    }
+}
+
+/// Puts a label's icon after its title.
+private struct TrailingIconLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) { configuration.title; configuration.icon }
     }
 }
 

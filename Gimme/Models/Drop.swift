@@ -33,6 +33,12 @@ struct Drop: Identifiable, Codable, Hashable {
     var challenge: Challenge
     var remaining: Int
     var expires: Date
+    /// Brand-written line for the unlock screen, such as Congrats! Looks like you are in fact "Having a Day".
+    var headline: String? = nil
+    /// Product photo shown when the drop is found.
+    var imageURL: URL? = nil
+    /// The brand's page where the golfer claims the prize.
+    var claimURL: URL? = nil
 
     func contains(_ point: Coordinate) -> Bool {
         Geo.meters(center, point) <= radiusMeters

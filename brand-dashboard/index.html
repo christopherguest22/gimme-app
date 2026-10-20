@@ -96,6 +96,12 @@
       <input id="prize" placeholder="Free sleeve of balls">
       <label for="detail">How to redeem</label>
       <input id="detail" placeholder="Show the code at the pro shop">
+      <label for="headline">Message when they win (optional)</label>
+      <input id="headline" placeholder="Congrats! Looks like you are in fact &quot;Having a Day&quot;">
+      <div class="row">
+        <div><label for="image">Product photo link (optional)</label><input id="image" type="url" placeholder="https://yourshop.com/hat.jpg"></div>
+        <div><label for="claim">Claim page link (optional)</label><input id="claim" type="url" placeholder="https://yourshop.com/products/hat"></div>
+      </div>
       <div class="row">
         <div><label for="qty">How many</label><input id="qty" type="number" min="1" value="25"></div>
         <div><label for="radius">Unlock zone (yards around the green)</label><input id="radius" type="number" min="15" value="50"></div>
@@ -194,11 +200,14 @@ async function createDrop() {
   const hole = course?.data.holes.find(h => h.number === Number($("hole").value));
   const brand = brands.find(b => b.id === brandId);
   if (!course || !hole || !$("prize").value.trim()) return show("createMsg", "Pick a course and hole and name the prize.", true);
+  const link = id => $(id).value.trim() || null;
+  if ([link("image"), link("claim")].some(u => u && !u.startsWith("https://"))) return show("createMsg", "Links need to start with https://", true);
   const row = {
     brand_id: brandId, brand: brand.name, prize: $("prize").value.trim(), detail: $("detail").value.trim(),
     course_id: course.id, hole: hole.number, lat: hole.greenCenter.latitude, lon: hole.greenCenter.longitude,
     radius_m: Number($("radius").value) * 0.9144, challenge: $("challenge").value, remaining: Number($("qty").value),
     starts_at: new Date($("starts").value).toISOString(), expires_at: new Date($("ends").value + "T23:59:59").toISOString(),
+    headline: link("headline"), image_url: link("image"), claim_url: link("claim"),
   };
   if (live) {
     const { error } = await db.from("drops").insert(row);
@@ -209,7 +218,7 @@ async function createDrop() {
     render();
   }
   show("createMsg", `Live! Golfers on hole ${hole.number} at ${course.name} can now win "${row.prize}".`);
-  $("prize").value = ""; $("detail").value = "";
+  for (const id of ["prize", "detail", "headline", "image", "claim"]) $(id).value = "";
 }
 
 async function redeem() {

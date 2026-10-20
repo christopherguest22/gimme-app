@@ -220,7 +220,7 @@ actor MockBackend: GimmeBackend {
             (12, "Back Nine Apparel", "Free logo hat", "Shipped to you.", .birdieOrBetter, 5),
             (16, "Nineteenth Hole Brewing", "Free drink at the turn", "Show the code at the bar.", .none, 40),
         ]
-        return offers.compactMap { offer in
+        var drops: [Drop] = offers.compactMap { offer in
             guard let hole = course.hole(offer.hole) else { return nil }
             let id = "\(course.id)-\(offer.hole)"
             return Drop(id: id, brand: offer.brand, prize: offer.prize, detail: offer.detail,
@@ -229,6 +229,20 @@ actor MockBackend: GimmeBackend {
                         remaining: stock[id] ?? offer.count,
                         expires: Calendar.current.date(byAdding: .day, value: 7, to: .now)!)
         }
+        // The launch partner drop on the finishing hole.
+        if let hole = course.hole(18) {
+            let id = "\(course.id)-18"
+            drops.append(Drop(id: id, brand: "Breezy Golf", prize: "Free Breezy Golf hat",
+                              detail: "Have A Day Rope Hat in green and navy, with your Gimme putt.",
+                              courseId: course.id, holeNumber: 18, center: hole.greenCenter,
+                              radiusMeters: 45, challenge: .parOrBetter,
+                              remaining: stock[id] ?? 24,
+                              expires: Calendar.current.date(byAdding: .day, value: 7, to: .now)!,
+                              headline: "Congrats! Looks like you are in fact \u{201C}Having a Day\u{201D}",
+                              imageURL: URL(string: "https://breezygolf.com/cdn/shop/files/DoingThings_r1_4x5_BRZ-838-RH-WT-OS_2387.jpg"),
+                              claimURL: URL(string: "https://breezygolf.com/products/have-a-day-rope-hat-contrast-green-and-navy")))
+        }
+        return drops
     }
 
     func visit(drop: Drop, round: Round, at point: Coordinate) async throws {

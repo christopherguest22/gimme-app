@@ -106,7 +106,11 @@ create table drops (
   challenge text not null default 'none' check (challenge in ('none', 'parOrBetter', 'birdieOrBetter')),
   remaining int not null check (remaining >= 0),
   starts_at timestamptz not null default now(),
-  expires_at timestamptz not null
+  expires_at timestamptz not null,
+  -- What the golfer sees when it unlocks: the brand's line, a product photo, and where to claim it.
+  headline text,
+  image_url text check (image_url ~ '^https://'),
+  claim_url text check (claim_url ~ '^https://')
 );
 
 -- A verified visit to a drop's geofence during an active round. Challenge drops are

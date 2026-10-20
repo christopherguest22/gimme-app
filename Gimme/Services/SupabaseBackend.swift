@@ -352,11 +352,15 @@ private struct DropRow: Decodable {
     var challenge: String
     var remaining: Int
     var expires_at: Date
+    var headline: String?
+    var image_url: String?
+    var claim_url: String?
 
     var drop: Drop {
         Drop(id: id.uuidString.lowercased(), brand: brand, prize: prize, detail: detail, courseId: course_id,
              holeNumber: hole, center: Coordinate(lat, lon), radiusMeters: radius_m,
-             challenge: Drop.Challenge(rawValue: challenge) ?? Drop.Challenge.none, remaining: remaining, expires: expires_at)
+             challenge: Drop.Challenge(rawValue: challenge) ?? Drop.Challenge.none, remaining: remaining, expires: expires_at,
+             headline: headline, imageURL: image_url.flatMap(URL.init(string:)), claimURL: claim_url.flatMap(URL.init(string:)))
     }
 }
 
