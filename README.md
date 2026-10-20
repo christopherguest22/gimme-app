@@ -135,3 +135,26 @@ To give a brand access, add a row to `brands` and a row to `brand_members` (thei
 - Push notifications from the server (a friend's birdie, a new drop at your course).
 - A licensed course-data provider for courses OpenStreetMap doesn't cover.
 - Legal review of prize drops (sweepstakes rules vary by state) before launch.
+
+## Beta on TestFlight
+
+Every push to `main` builds the app, runs the tests and uploads a new build to TestFlight
+(`.github/workflows/testflight.yml`). The one-time setup (Apple developer account, App Store
+Connect API key, GitHub secrets, Supabase, LiveKit, hosting the website pages) is a checklist in
+[docs/TESTFLIGHT.md](docs/TESTFLIGHT.md).
+
+What's in place for App Review:
+
+- **Delete account:** Me › ⋯ › Delete account runs `delete_account()`, which removes the golfer's
+  posts, comments, clips, prizes and login. Rounds played with friends pass to another player.
+- **Report and block:** the ⋯ on every feed post, and a swipe on any comment. Blocking hides each
+  other's posts, comments and cheers. Reports land in the `reports` table; check it daily, and a
+  post three golfers report is hidden straight away (`feed_posts.hidden`).
+- **Terms:** sign-in asks golfers to agree to the Terms of Use (`website/terms.html`). Set
+  `GimmeTermsURL` and `GimmePrivacyURL` in `project.yml` to wherever `website/` is hosted.
+- **Privacy manifest:** `Gimme/PrivacyInfo.xcprivacy`. No tracking.
+- **Reviewer sign-in:** make a user with a password in Supabase. On the code screen, tap "Sign in
+  with a password instead".
+
+Palmetto & Pine Golf Co. drops for the beta: run `supabase/seed-palmetto-pine.sql` after
+`schema.sql`.

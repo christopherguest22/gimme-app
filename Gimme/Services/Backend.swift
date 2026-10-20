@@ -20,6 +20,8 @@ protocol GimmeBackend {
     /// The course shown under the golfer's name on their posts.
     func updateHomeCourse(_ name: String?) async throws -> Player
     func signOut() async throws
+    /// Deletes the golfer's account and everything they posted (App Store rule 5.1.1(v)).
+    func deleteAccount() async throws
 
     // Friends and feed
     func friends() async throws -> [Player]
@@ -33,6 +35,11 @@ protocol GimmeBackend {
     func comments(on post: FeedPost) async throws -> [FeedComment]
     func comment(_ text: String, on post: FeedPost) async throws -> FeedComment
     func recordView(_ post: FeedPost) async throws
+    func deletePost(_ post: FeedPost) async throws
+    func deleteComment(_ comment: FeedComment) async throws
+    /// Hides each other's posts, comments and cheers, and ends the friendship.
+    func block(_ player: Player) async throws
+    func report(_ target: ReportTarget, reason: String) async throws
 
     // Going live
     /// Starts or stops letting friends watch this round.
@@ -121,10 +128,10 @@ actor MockBackend: GimmeBackend {
                      courseId: ocean?.id, courseName: ocean?.name, hole: 18),
             FeedPost(author: friendList[2], kind: .round, title: "Shot 71 at The Ocean Course",
                      detail: "-1 with 4 birdies. Putter was hot.", postedAt: .now.addingTimeInterval(-3_600), likes: 6, congrats: 9),
-            FeedPost(author: friendList[0], kind: .drop, title: "Won a Breezy Golf hat on 18",
-                     detail: "Par on the last at the Ocean Course. Breezy Golf drop.", postedAt: .now.addingTimeInterval(-7_200),
+            FeedPost(author: friendList[0], kind: .drop, title: "Won a Fore the Carolinas Rope Hat on 18",
+                     detail: "Par on the last at the Ocean Course. Palmetto & Pine drop.", postedAt: .now.addingTimeInterval(-7_200),
                      likes: 3, congrats: 14, courseId: ocean?.id, courseName: ocean?.name, hole: 18,
-                     imageURL: URL(string: "https://breezygolf.com/cdn/shop/files/DoingThings_r1_4x5_BRZ-838-RH-WT-OS_2387.jpg")),
+                     imageURL: URL(string: "https://palmettoandpinegolf.com/cdn/shop/files/Product_Photos_20.png?v=1729101055&width=1080")),
             FeedPost(author: friendList[1], kind: .note, title: "Saturday 8:10am at Osprey, who's in?",
                      detail: "Need a fourth.", postedAt: .now.addingTimeInterval(-86_400), likes: 2, comments: 1),
         ]
@@ -166,6 +173,12 @@ actor MockBackend: GimmeBackend {
     }
 
     func signOut() async throws { me = nil }
+
+    func deleteAccount() async throws {
+        posts.removeAll { $0.author.id == "me" || $0.author.id == me?.id }
+        prizes = []
+        me = nil
+    }
 
     // MARK: Friends and feed
 
@@ -216,6 +229,26 @@ actor MockBackend: GimmeBackend {
 
     func recordView(_ post: FeedPost) async throws {
         if let i = posts.firstIndex(where: { $0.id == post.id }) { posts[i].views += 1 }
+    }
+
+    func deletePost(_ post: FeedPost) async throws { posts.removeAll { $0.id == post.id } }
+
+    func deleteComment(_ comment: FeedComment) async throws {
+        for (post, list) in commentsByPost where list.contains(where: { $0.id == comment.id }) {
+            commentsByPost[post] = list.filter { $0.id != comment.id }
+            if let i = posts.firstIndex(where: { $0.id == post }) { posts[i].comments -= 1 }
+        }
+    }
+
+    func block(_ player: Player) async throws {
+        posts.removeAll { $0.author.id == player.id }
+        friendList.removeAll { $0.id == player.id }
+        for (post, list) in commentsByPost { commentsByPost[post] = list.filter { $0.author.id != player.id } }
+    }
+
+    /// The demo has no one to review reports; the post is just hidden for this golfer.
+    func report(_ target: ReportTarget, reason: String) async throws {
+        if case .post(let post) = target { posts.removeAll { $0.id == post.id } }
     }
 
     // MARK: Going live
@@ -354,37 +387,42 @@ actor MockBackend: GimmeBackend {
 
     // MARK: Drops
 
-    /// Sample sponsors on four holes of any course, ringed around each green.
+    /// The beta's launch partner, Palmetto & Pine Golf Co., on four holes of any course.
     func drops(for course: Course) async throws -> [Drop] {
-        let offers: [(hole: Int, brand: String, prize: String, detail: String, challenge: Drop.Challenge, count: Int)] = [
-            (3, "Green Read Putters", "20% off any putter", "Online code, good for 30 days.", .none, 25),
-            (7, "Fairway Co.", "Free sleeve of balls", "Pick up at the pro shop.", .parOrBetter, 12),
-            (12, "Back Nine Apparel", "Free logo hat", "Shipped to you.", .birdieOrBetter, 5),
-            (16, "Nineteenth Hole Brewing", "Free drink at the turn", "Show the code at the bar.", .none, 40),
+        let pp = "https://palmettoandpinegolf.com"
+        let offers: [(hole: Int, brand: String, prize: String, detail: String, challenge: Drop.Challenge, count: Int,
+                      headline: String, imageURL: String, claimURL: String)] = [
+            (5, "Palmetto & Pine", "Free Laid Back Ball Marker",
+             "The Laid Back Ball Marker from Palmetto & Pine, on the house for beta testers.", .none, 10,
+             "Mark it down. You\u{2019}re officially \u{201C}Laid Back\u{201D}",
+             pp + "/cdn/shop/files/ProductPhotos_4b5f0c15-e346-47c8-93f8-a1d705ad1a44.png?v=1787250279&width=1080",
+             pp + "/products/the-laid-back-ball-marker-c3-custom-golf"),
+            (7, "Palmetto & Pine", "Free Dogwood & Jessamine Caddie Towel",
+             "Dogwood & Jessamine Caddie Towel from Palmetto & Pine, on the house for beta testers.", .none, 8,
+             "Clean round, clean clubs. A Dogwood & Jessamine towel is yours",
+             pp + "/cdn/shop/files/Product_Photos_8_5e4693bb-6827-4f9f-bc5f-accbacd1d787.png?v=1778599117&width=1080",
+             pp + "/products/dogwood-jessamine-caddie-towel"),
+            (12, "Palmetto & Pine", "Free Carolina Comfort Hoodie",
+             "The Carolina Comfort Hoodie from Palmetto & Pine, on the house for beta testers.", .birdieOrBetter, 3,
+             "Birdie? That\u{2019}s some real \u{201C}Carolina Comfort\u{201D}",
+             pp + "/cdn/shop/files/Product_Photos_6_b4d3d496-5d5d-4d8d-8403-4b9556bbd653.png?v=1760987557&width=1080",
+             pp + "/products/the-carolina-comfort-hoodie"),
+            (18, "Palmetto & Pine", "Free Fore the Carolinas Rope Hat",
+             "Fore the Carolinas Rope Hat from Palmetto & Pine, on the house for beta testers.", .parOrBetter, 6,
+             "Congrats! You just went \u{201C}Fore the Carolinas\u{201D}",
+             pp + "/cdn/shop/files/Product_Photos_20.png?v=1729101055&width=1080",
+             pp + "/products/fore-the-carolinas-rope-hat"),
         ]
-        var drops: [Drop] = offers.compactMap { offer in
+        return offers.compactMap { offer in
             guard let hole = course.hole(offer.hole) else { return nil }
             let id = "\(course.id)-\(offer.hole)"
             return Drop(id: id, brand: offer.brand, prize: offer.prize, detail: offer.detail,
                         courseId: course.id, holeNumber: offer.hole, center: hole.greenCenter,
                         radiusMeters: 45, challenge: offer.challenge,
                         remaining: stock[id] ?? offer.count,
-                        expires: Calendar.current.date(byAdding: .day, value: 7, to: .now)!)
+                        expires: Calendar.current.date(byAdding: .day, value: 30, to: .now)!,
+                        headline: offer.headline, imageURL: URL(string: offer.imageURL), claimURL: URL(string: offer.claimURL))
         }
-        // The launch partner drop on the finishing hole.
-        if let hole = course.hole(18) {
-            let id = "\(course.id)-18"
-            drops.append(Drop(id: id, brand: "Breezy Golf", prize: "Free Breezy Golf hat",
-                              detail: "Have A Day Rope Hat in green and navy, with your Gimme putt.",
-                              courseId: course.id, holeNumber: 18, center: hole.greenCenter,
-                              radiusMeters: 45, challenge: .parOrBetter,
-                              remaining: stock[id] ?? 24,
-                              expires: Calendar.current.date(byAdding: .day, value: 7, to: .now)!,
-                              headline: "Congrats! Looks like you are in fact \u{201C}Having a Day\u{201D}",
-                              imageURL: URL(string: "https://breezygolf.com/cdn/shop/files/DoingThings_r1_4x5_BRZ-838-RH-WT-OS_2387.jpg"),
-                              claimURL: URL(string: "https://breezygolf.com/products/have-a-day-rope-hat-contrast-green-and-navy")))
-        }
-        return drops
     }
 
     func visit(drop: Drop, round: Round, at point: Coordinate) async throws {

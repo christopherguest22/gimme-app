@@ -7,7 +7,15 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    # Your Apple Team ID (developer.apple.com › Membership). CI passes it in from a secret.
     DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: "0.9.0"
+    # CI sets this to the run number so every TestFlight upload gets a new build.
+    CURRENT_PROJECT_VERSION: "1"
+    # Leave blank to run on demo data. Fill in from Supabase › Project Settings › API,
+    # or let CI pass them in from secrets.
+    SUPABASE_URL: ""
+    SUPABASE_ANON_KEY: ""
 packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
@@ -27,7 +35,10 @@ targets:
       path: Gimme/Info.plist
       properties:
         CFBundleDisplayName: Gimme
-        CFBundleShortVersionString: "0.2.0"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Gimme only uses the encryption built into iOS (HTTPS), so no export paperwork per build.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: AccentColor
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
@@ -36,9 +47,11 @@ targets:
         NSCameraUsageDescription: "Gimme uses the camera to film clips of your shots and to stream your round when you go live."
         NSMicrophoneUsageDescription: "Gimme records sound with your clips and live stream."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Gimme keeps GPS on during your round, even with your phone in your pocket, so you don't miss prize drops."
-        # Leave blank to run on demo data. Fill in from Supabase › Project Settings › API.
-        SupabaseURL: ""
-        SupabaseAnonKey: ""
+        SupabaseURL: $(SUPABASE_URL)
+        SupabaseAnonKey: $(SUPABASE_ANON_KEY)
+        # Pages linked from sign-in and Profile. Point these at wherever website/ is hosted.
+        GimmeTermsURL: "https://gimmegolf.app/terms.html"
+        GimmePrivacyURL: "https://gimmegolf.app/privacy.html"
         # Satellite photos: apple (no key), mapbox (needs MapboxAccessToken) or esri (testing only
         # until you add an ArcGIS key). See README › Satellite imagery.
         SatelliteProvider: apple

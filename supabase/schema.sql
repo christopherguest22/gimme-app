@@ -77,6 +77,7 @@ create table feed_posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid references profiles not null default auth.uid(),
   kind text not null check (kind in ('round', 'drop', 'note', 'clip', 'trending', 'live')),
+  hidden boolean not null default false,  -- taken down after reports; only the author still sees it
   title text not null,
   detail text not null default '',
   posted_at timestamptz not null default now(),
@@ -307,6 +308,21 @@ create function is_friend(other uuid) returns boolean language sql stable as $$
     where status = 'accepted' and ((user_id = auth.uid() and friend_id = other) or (friend_id = auth.uid() and user_id = other)))
 $$;
 
+-- Blocking works both ways: neither golfer sees the other's posts, comments or cheers.
+create table blocks (
+  user_id uuid references profiles on delete cascade default auth.uid(),
+  blocked_id uuid references profiles on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, blocked_id)
+);
+alter table blocks enable row level security;
+create policy "my blocks" on blocks for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create function is_blocked(other uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from blocks
+    where (user_id = auth.uid() and blocked_id = other) or (user_id = other and blocked_id = auth.uid()))
+$$;
+
 create function in_round(r uuid) returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from round_players where round_id = r and player_id = auth.uid())
 $$;
@@ -319,7 +335,7 @@ $$;
 -- Posts you can see: public clips from anyone, plus your own and your friends'.
 create function can_see_post(p uuid) returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from feed_posts
-    where id = p and (audience = 'everyone' or author_id = auth.uid() or is_friend(author_id)))
+    where id = p and (author_id = auth.uid() or ((audience = 'everyone' or is_friend(author_id)) and not hidden and not is_blocked(author_id))))
 $$;
 
 create policy "profiles readable" on profiles for select using (true);
@@ -347,13 +363,14 @@ create policy "scores in my rounds" on scores for all using (in_round(round_id))
 create policy "chat in my rounds" on chat_messages for select using (in_round(round_id));
 create policy "post chat" on chat_messages for insert with check (in_round(round_id) and author_id = auth.uid());
 create policy "feed I can see" on feed_posts for select
-  using (audience = 'everyone' or author_id = auth.uid() or is_friend(author_id));
+  using (author_id = auth.uid() or ((audience = 'everyone' or is_friend(author_id)) and not hidden and not is_blocked(author_id)));
 create policy "post to feed" on feed_posts for insert with check (author_id = auth.uid());
 create policy "delete my posts" on feed_posts for delete using (author_id = auth.uid());
 create policy "reactions on posts I see" on post_reactions for select using (can_see_post(post_id));
 create policy "react" on post_reactions for insert with check (user_id = auth.uid() and can_see_post(post_id));
 create policy "unreact" on post_reactions for delete using (user_id = auth.uid());
-create policy "comments on posts I see" on post_comments for select using (can_see_post(post_id));
+create policy "comments on posts I see" on post_comments for select using (can_see_post(post_id) and not is_blocked(author_id));
+create policy "delete my comments" on post_comments for delete using (author_id = auth.uid());
 create policy "comment" on post_comments for insert with check (author_id = auth.uid() and can_see_post(post_id));
 create policy "watch live rounds" on rounds for select using (can_watch(id));
 create policy "watch live players" on round_players for select using (can_watch(round_id));
@@ -361,7 +378,7 @@ create policy "watch live scores" on scores for select using (can_watch(round_id
 create policy "watch positions" on live_positions for select using (can_watch(round_id));
 create policy "share my position" on live_positions for all
   using (player_id = auth.uid() and in_round(round_id)) with check (player_id = auth.uid() and in_round(round_id));
-create policy "read cheers" on live_cheers for select using (can_watch(round_id));
+create policy "read cheers" on live_cheers for select using (can_watch(round_id) and not is_blocked(author_id));
 create policy "cheer" on live_cheers for insert with check (author_id = auth.uid() and can_watch(round_id));
 create policy "my claims" on drop_claims for select using (user_id = auth.uid());
 -- drop_visits and drop_claims are only written through visit_drop(), claim_drop() and redeem_code().
@@ -400,3 +417,54 @@ create policy "delete my clips" on storage.objects for delete to authenticated
 
 -- Live scorecard and chat, and watching rounds live: phones subscribe to these tables.
 alter publication supabase_realtime add table scores, chat_messages, live_positions, live_cheers, rounds;
+
+-- Reports of objectionable posts, comments or golfers. Review them in the table editor at least
+-- daily (App Store rule 1.2): set feed_posts.hidden, delete the comment, or delete the account.
+create table reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid references profiles on delete set null default auth.uid(),
+  post_id uuid references feed_posts on delete cascade,
+  comment_id uuid references post_comments on delete cascade,
+  user_id uuid references profiles on delete cascade,     -- the golfer being reported
+  reason text not null check (length(reason) between 1 and 500),
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+alter table reports enable row level security;
+create policy "file reports" on reports for insert with check (reporter_id = auth.uid());
+create policy "my reports" on reports for select using (reporter_id = auth.uid());
+
+-- A post three different golfers report is hidden right away, before anyone reviews it.
+create function hide_reported_post() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.post_id is not null and
+     (select count(distinct reporter_id) from reports where post_id = new.post_id) >= 3 then
+    update feed_posts set hidden = true where id = new.post_id;
+  end if;
+  return new;
+end $$;
+create trigger on_report after insert on reports for each row execute function hide_reported_post();
+
+-- Deleting an account from the app (App Store rule 5.1.1(v)). Rounds the golfer started with
+-- friends are handed to another player so their scores survive; everything else of theirs goes.
+-- The app removes their video clips from storage first.
+create function delete_account() returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid();
+begin
+  if me is null then raise exception 'Not signed in'; end if;
+  update rounds r set created_by = (select player_id from round_players p where p.round_id = r.id and p.player_id <> me limit 1)
+    where created_by = me and exists (select 1 from round_players p where p.round_id = r.id and p.player_id <> me);
+  delete from rounds where created_by = me;
+  delete from scores where player_id = me;
+  delete from round_players where player_id = me;
+  delete from chat_messages where author_id = me;
+  delete from live_positions where player_id = me;
+  delete from live_cheers where author_id = me;
+  delete from post_comments where author_id = me;
+  delete from feed_posts where author_id = me;
+  delete from drop_visits where user_id = me;
+  delete from drop_claims where user_id = me;
+  delete from auth.users where id = me;   -- cascades to profiles, friendships, reactions, blocks
+end $$;
+revoke execute on function delete_account() from public, anon;
+grant execute on function delete_account() to authenticated;

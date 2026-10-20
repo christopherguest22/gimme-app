@@ -35,6 +35,11 @@ final class SupabaseBackend: GimmeBackend {
     }
 
     func verifySignInCode(email: String, code: String) async throws -> Player {
+        // A password instead of the emailed digits: the App Review account, which can't get our emails.
+        if code.contains(where: { !$0.isNumber }) {
+            let session = try await client.auth.signIn(email: email, password: code)
+            return try await profile(session.user.id.uuidString.lowercased())
+        }
         let response = try await client.auth.verifyOTP(email: email, token: code, type: .email)
         return try await profile(response.user.id.uuidString.lowercased())
     }
@@ -47,6 +52,16 @@ final class SupabaseBackend: GimmeBackend {
 
     func signOut() async throws {
         try await client.auth.signOut()
+    }
+
+    /// Removes the golfer's clips from storage, then their data and login (see delete_account()).
+    func deleteAccount() async throws {
+        let id = try await userId()
+        let clips = client.storage.from("clips")
+        let files = (try? await clips.list(path: id)) ?? []
+        if !files.isEmpty { _ = try? await clips.remove(paths: files.map { "\(id)/\($0.name)" }) }
+        try await client.rpc("delete_account").execute()
+        try? await client.auth.signOut(scope: .local)
     }
 
     func updatePayHandles(venmo: String?, cashApp: String?) async throws -> Player {
@@ -151,6 +166,32 @@ final class SupabaseBackend: GimmeBackend {
 
     func recordView(_ post: FeedPost) async throws {
         try await client.rpc("record_view", params: ["p_post": post.id]).execute()
+    }
+
+    func deletePost(_ post: FeedPost) async throws {
+        try await client.from("feed_posts").delete().eq("id", value: post.id.uuidString.lowercased()).execute()
+    }
+
+    func deleteComment(_ comment: FeedComment) async throws {
+        try await client.from("post_comments").delete().eq("id", value: comment.id.uuidString.lowercased()).execute()
+    }
+
+    func block(_ player: Player) async throws {
+        let me = try await userId()
+        try await client.from("blocks").upsert(BlockRow(blocked_id: player.id), ignoreDuplicates: true).execute()
+        try await client.from("friendships").delete()
+            .or("and(user_id.eq.\(me),friend_id.eq.\(player.id)),and(user_id.eq.\(player.id),friend_id.eq.\(me))")
+            .execute()
+    }
+
+    func report(_ target: ReportTarget, reason: String) async throws {
+        var row = ReportInsert(reason: reason, user_id: target.author.id)
+        switch target {
+        case .post(let post): row.post_id = post.id
+        case .comment(let comment): row.comment_id = comment.id
+        case .player: break
+        }
+        try await client.from("reports").insert(row).execute()
     }
 
     // MARK: Going live
@@ -510,6 +551,17 @@ private struct FeedInsert: Encodable {
 private struct ReactionRow: Encodable {
     var post_id: UUID
     var kind: String
+}
+
+private struct BlockRow: Encodable {
+    var blocked_id: String
+}
+
+private struct ReportInsert: Encodable {
+    var reason: String
+    var user_id: String
+    var post_id: UUID? = nil
+    var comment_id: UUID? = nil
 }
 
 private struct CommentInsert: Encodable {

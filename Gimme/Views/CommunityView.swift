@@ -148,6 +148,7 @@ struct FeedPage: View {
     var isCurrent: Bool
     var watch: (UUID) -> Void
     var comment: (FeedPost) -> Void
+    @State private var reporting: ReportTarget?
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -164,6 +165,7 @@ struct FeedPage: View {
         }
         .foregroundStyle(.white)
         .clipped()
+        .reportDialog($reporting)
     }
 
     // MARK: Background
@@ -272,6 +274,7 @@ struct FeedPage: View {
 
     private var rail: some View {
         VStack(spacing: 18) {
+            moreMenu
             railButton(post.likedByMe ? "heart.fill" : "heart", count: post.likes, tint: post.likedByMe ? Color.gimmeBirdie : .white,
                        label: "Like") { app.toggle(.like, on: post) }
             railButton("bubble.right.fill", count: post.comments, label: "Comments") { comment(post) }
@@ -296,6 +299,24 @@ struct FeedPage: View {
         }
         .shadow(color: .black.opacity(0.5), radius: 4)
         .frame(width: 56)
+    }
+
+    /// Report, block, or delete your own post.
+    private var moreMenu: some View {
+        Menu {
+            if post.author.id == app.myId {
+                Button("Delete post", systemImage: "trash", role: .destructive) { Task { await app.deletePost(post) } }
+            } else {
+                Button("Report post", systemImage: "flag") { reporting = .post(post) }
+                Button("Block \(post.author.name)", systemImage: "hand.raised", role: .destructive) {
+                    Task { await app.block(post.author) }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.system(size: 22, weight: .heavy))
+                .frame(width: 44, height: 32)
+        }
+        .accessibilityLabel("More options")
     }
 
     private var shareText: String {
@@ -471,6 +492,7 @@ struct CommentsSheet: View {
     @State private var comments: [FeedComment] = []
     @State private var draft = ""
     @State private var loading = true
+    @State private var reporting: ReportTarget?
 
     var body: some View {
         NavigationStack {
@@ -489,6 +511,23 @@ struct CommentsSheet: View {
                                     .font(.gimme(11)).foregroundStyle(.secondary)
                             }
                             Text(comment.text).font(.gimme(15))
+                        }
+                    }
+                    .swipeActions {
+                        if comment.author.id == app.myId {
+                            Button("Delete", role: .destructive) {
+                                Task {
+                                    if await app.deleteComment(comment, on: post) { comments.removeAll { $0.id == comment.id } }
+                                }
+                            }
+                        } else {
+                            Button("Report") { reporting = .comment(comment) }.tint(.orange)
+                            Button("Block", role: .destructive) {
+                                Task {
+                                    await app.block(comment.author)
+                                    comments.removeAll { $0.author.id == comment.author.id }
+                                }
+                            }
                         }
                     }
                 }
@@ -513,6 +552,9 @@ struct CommentsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
+        .reportDialog($reporting) { target in
+            if case .comment(let reported) = target { comments.removeAll { $0.id == reported.id } }
+        }
         .task {
             comments = await app.comments(on: post)
             loading = false
@@ -788,5 +830,35 @@ struct NetworkView: View {
             }
         }
         .gimmeCard()
+    }
+}
+
+// MARK: - Reporting
+
+extension View {
+    /// Asks why a post, comment or golfer is being reported, then sends the report.
+    func reportDialog(_ target: Binding<ReportTarget?>, reported: @escaping (ReportTarget) -> Void = { _ in }) -> some View {
+        modifier(ReportDialog(target: target, reported: reported))
+    }
+}
+
+private struct ReportDialog: ViewModifier {
+    @Environment(AppState.self) private var app
+    @Binding var target: ReportTarget?
+    var reported: (ReportTarget) -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Why are you reporting this?", isPresented: Binding(
+            get: { target != nil }, set: { if !$0 { target = nil } }), titleVisibility: .visible, presenting: target) { item in
+            ForEach(ReportTarget.reasons, id: \.self) { reason in
+                Button(reason) {
+                    reported(item)
+                    Task { await app.report(item, reason: reason) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("We review every report within 24 hours. You can also block them so you never see each other's posts.")
+        }
     }
 }

@@ -7,6 +7,7 @@ struct OnboardingView: View {
     @State private var step = Step.slides
     @State private var email = ""
     @State private var code = ""
+    @State private var usePassword = false
     @State private var name = ""
     @State private var avatar = "🏌️"
     @State private var working = false
@@ -119,23 +120,49 @@ struct OnboardingView: View {
                 if working { ProgressView() } else { Text("Email me a code") }
             }
             .buttonStyle(.gimmePrize)
-            .disabled(!email.contains("@") || working)
+            .disabled(!email.contains("@") || !app.acceptedTerms || working)
+            termsCheck
             Spacer()
+        }
+    }
+
+    /// Agreeing to the Terms of Use, which say abusive posts and golfers aren't tolerated.
+    private var termsCheck: some View {
+        let terms = "I agree to the [Terms of Use](\(AppState.termsURL.absoluteString)) and [Privacy Policy](\(AppState.privacyURL.absoluteString)). No abusive or objectionable posts."
+        return HStack(alignment: .top, spacing: 10) {
+            Button { app.acceptedTerms.toggle() } label: {
+                Image(systemName: app.acceptedTerms ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 22))
+                    .foregroundStyle(app.acceptedTerms ? Color.gimmeLime : .white)
+            }
+            .accessibilityLabel("I agree to the Terms of Use and Privacy Policy")
+            .accessibilityAddTraits(app.acceptedTerms ? .isSelected : [])
+            Text((try? AttributedString(markdown: terms)) ?? AttributedString(terms))
+                .font(.gimme(13, .semibold))
+                .foregroundStyle(.white)
+                .tint(Color.gimmeLime)
         }
     }
 
     private var codeView: some View {
         VStack(spacing: 16) {
             Spacer()
-            Text("Enter the 6-digit code we sent to \(email)")
+            Text(usePassword ? "Enter the password for \(email)" : "Enter the 6-digit code we sent to \(email)")
                 .font(.gimme(20, .bold)).foregroundStyle(.white).multilineTextAlignment(.center)
-            TextField("123456", text: $code)
-                .textContentType(.oneTimeCode)
-                .keyboardType(.numberPad)
-                .font(.gimme(28, .bold))
-                .multilineTextAlignment(.center)
-                .padding()
-                .background(.white, in: RoundedRectangle(cornerRadius: 14))
+            Group {
+                if usePassword {
+                    // Accounts made with a password, like the one for App Review.
+                    SecureField("Password", text: $code).textContentType(.password)
+                } else {
+                    TextField("123456", text: $code)
+                        .textContentType(.oneTimeCode)
+                        .keyboardType(.numberPad)
+                }
+            }
+            .font(.gimme(28, .bold))
+            .multilineTextAlignment(.center)
+            .padding()
+            .background(.white, in: RoundedRectangle(cornerRadius: 14))
             Button {
                 Task {
                     working = true
@@ -149,6 +176,12 @@ struct OnboardingView: View {
             .disabled(code.count < 6 || working)
             Button("Use a different email") { step = .email }
                 .foregroundStyle(.white)
+            Button(usePassword ? "Use the emailed code" : "Sign in with a password instead") {
+                usePassword.toggle()
+                code = ""
+            }
+            .font(.gimme(13, .semibold))
+            .foregroundStyle(.white.opacity(0.75))
             Spacer()
         }
     }

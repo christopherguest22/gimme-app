@@ -342,3 +342,26 @@ final class FeedTests: XCTestCase {
         XCTAssertEqual(me.headline, "")
     }
 }
+
+final class SafetyTests: XCTestCase {
+    func testBlockingHidesTheirPosts() async throws {
+        let backend = MockBackend()
+        let posts = try await backend.feed()
+        let author = try XCTUnwrap(posts.first?.author)
+        try await backend.block(author)
+        let after = try await backend.feed()
+        XCTAssertFalse(after.contains { $0.author.id == author.id })
+        let friends = try await backend.friends()
+        XCTAssertFalse(friends.contains { $0.id == author.id })
+    }
+
+    func testReportedPostIsHidden() async throws {
+        let backend = MockBackend()
+        let before = try await backend.feed()
+        let post = try XCTUnwrap(before.first)
+        try await backend.report(.post(post), reason: ReportTarget.reasons[0])
+        let after = try await backend.feed()
+        XCTAssertFalse(after.contains { $0.id == post.id })
+        XCTAssertEqual(ReportTarget.post(post).author.id, post.author.id)
+    }
+}

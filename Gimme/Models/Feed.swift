@@ -67,6 +67,24 @@ struct FeedComment: Identifiable, Codable, Hashable {
 
 enum Reaction: String, Codable { case like, congrats }
 
+/// Something a golfer reports as objectionable: a post, a comment, or another golfer.
+enum ReportTarget: Hashable {
+    case post(FeedPost)
+    case comment(FeedComment)
+    case player(Player)
+
+    var author: Player {
+        switch self {
+        case .post(let post): post.author
+        case .comment(let comment): comment.author
+        case .player(let player): player
+        }
+    }
+
+    static let reasons = ["Spam or scam", "Harassment or hate", "Nudity or sexual content",
+                          "Violence or something dangerous", "Something else"]
+}
+
 /// Picks the clip to show a golfer who has just reached a hole: the hottest clip someone else
 /// posted on that hole in the last 60 days, if it has any traction at all.
 enum Trending {

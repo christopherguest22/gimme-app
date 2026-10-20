@@ -332,6 +332,7 @@ struct Confetti: View {
 struct ProfileView: View {
     @Environment(AppState.self) private var app
     @State private var editing = false
+    @State private var confirmingDelete = false
 
     private var fullRounds: [Round] { app.pastRounds.filter { $0.holesPlayed(app.myId) == $0.pars.count && $0.pars.count == 18 } }
 
@@ -383,9 +384,12 @@ struct ProfileView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Edit profile", systemImage: "pencil") { editing = true }
-                        Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                        Link(destination: AppState.termsURL) { Label("Terms of Use", systemImage: "doc.text") }
+                        Link(destination: AppState.privacyURL) { Label("Privacy Policy", systemImage: "hand.raised") }
+                        Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right") {
                             Task { await app.signOut() }
                         }
+                        Button("Delete account", systemImage: "trash", role: .destructive) { confirmingDelete = true }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -393,6 +397,12 @@ struct ProfileView: View {
                 }
             }
             .sheet(isPresented: $editing) { EditProfileView() }
+            .alert("Delete your account?", isPresented: $confirmingDelete) {
+                Button("Delete", role: .destructive) { Task { await app.deleteAccount() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your profile, rounds you started alone, posts, clips, comments and prizes are deleted for good. Rounds with friends stay on their scorecards without you.")
+            }
         }
     }
 

@@ -115,11 +115,87 @@ final class AppState {
 
     func signOut() async {
         try? await backend.signOut()
+        clearAccount()
+    }
+
+    /// Deletes the account for good. Returns false, with the reason in `message`, if it failed.
+    func deleteAccount() async -> Bool {
+        do {
+            if isLive { await setLive(false) }
+            await hostVideo.stop()
+            try await backend.deleteAccount()
+            clearAccount()
+            return true
+        } catch {
+            message = "Couldn't delete your account: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func clearAccount() {
         me = nil
         friends = []
         feed = []
         wallet = []
         pastRounds = []
+    }
+
+    // MARK: Safety
+
+    /// Whether this golfer agreed to the Terms of Use (no tolerance for abusive content).
+    var acceptedTerms = UserDefaults.standard.bool(forKey: "gimme.acceptedTerms") {
+        didSet { UserDefaults.standard.set(acceptedTerms, forKey: "gimme.acceptedTerms") }
+    }
+
+    static let termsURL = infoURL("GimmeTermsURL")
+    static let privacyURL = infoURL("GimmePrivacyURL")
+
+    private static func infoURL(_ key: String) -> URL {
+        (Bundle.main.object(forInfoDictionaryKey: key) as? String).flatMap(URL.init(string:))
+            ?? URL(string: "https://gimmegolf.app")!
+    }
+
+    /// Reports a post, comment or golfer for review, and hides a reported post right away.
+    func report(_ target: ReportTarget, reason: String) async {
+        do {
+            try await backend.report(target, reason: reason)
+            if case .post(let post) = target { feed.removeAll { $0.id == post.id } }
+            message = "Thanks. We'll review it within 24 hours."
+        } catch {
+            message = "Report not sent: \(error.localizedDescription)"
+        }
+    }
+
+    /// Blocks a golfer: their posts disappear and they can't see yours.
+    func block(_ player: Player) async {
+        do {
+            try await backend.block(player)
+            feed.removeAll { $0.author.id == player.id }
+            friends.removeAll { $0.id == player.id }
+            message = "\(player.name) is blocked."
+        } catch {
+            message = "Couldn't block \(player.name): \(error.localizedDescription)"
+        }
+    }
+
+    func deletePost(_ post: FeedPost) async {
+        do {
+            try await backend.deletePost(post)
+            feed.removeAll { $0.id == post.id }
+        } catch {
+            message = "Couldn't delete the post: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteComment(_ comment: FeedComment, on post: FeedPost) async -> Bool {
+        do {
+            try await backend.deleteComment(comment)
+            if let i = feed.firstIndex(where: { $0.id == post.id }) { feed[i].comments -= 1 }
+            return true
+        } catch {
+            message = "Couldn't delete the comment: \(error.localizedDescription)"
+            return false
+        }
     }
 
     func addFriend(_ handle: String) async {
